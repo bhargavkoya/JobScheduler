@@ -1,4 +1,5 @@
 using JobScheduler.Domain.Jobs;
+using JobScheduler.Domain.Runs;
 using JobScheduler.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<JobTemplate> JobTemplates => Set<JobTemplate>();
     public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<JobRun> JobRuns => Set<JobRun>();
+    public DbSet<JobRunStep> JobRunSteps => Set<JobRunStep>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +64,29 @@ public class JobSchedulerDbContext : DbContext
             b.HasOne<User>().WithMany().HasForeignKey(j => j.OwnerId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(j => j.Status);
             b.HasIndex(j => new { j.Team, j.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<JobRun>(b =>
+        {
+            b.HasKey(r => r.Id);
+            b.Property(r => r.IdempotencyKey).HasMaxLength(200).IsRequired();
+            b.HasIndex(r => r.IdempotencyKey).IsUnique();
+            b.HasIndex(r => r.JobId);
+            b.HasIndex(r => r.Status);
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(32);
+            b.Property(r => r.FailedStep).HasConversion<string>().HasMaxLength(32);
+            b.HasOne<Job>().WithMany().HasForeignKey(r => r.JobId).OnDelete(DeleteBehavior.Cascade);
+            b.HasMany(r => r.Steps).WithOne().HasForeignKey(st => st.RunId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<JobRunStep>(b =>
+        {
+            b.HasKey(st => st.Id);
+            // Steps are always added explicitly (never discovered through the navigation),
+            // so EF must not treat a client-assigned Guid as an existing row.
+            b.Property(st => st.Id).ValueGeneratedNever();
+            b.Property(st => st.Step).HasConversion<string>().HasMaxLength(32);
+            b.Property(st => st.Status).HasConversion<string>().HasMaxLength(32);
         });
 
         modelBuilder.Entity<UserClaim>(b =>

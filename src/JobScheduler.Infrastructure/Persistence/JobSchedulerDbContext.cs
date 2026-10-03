@@ -19,6 +19,7 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<JobRun> JobRuns => Set<JobRun>();
     public DbSet<JobRunStep> JobRunSteps => Set<JobRunStep>();
     public DbSet<CalculationRule> CalculationRules => Set<CalculationRule>();
+    public DbSet<SentEmail> SentEmails => Set<SentEmail>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -98,6 +99,14 @@ public class JobSchedulerDbContext : DbContext
             b.Property(r => r.Description).HasMaxLength(2000);
             b.Property(r => r.Type).HasMaxLength(64).IsRequired();
             b.Property(r => r.ParametersJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<SentEmail>(b =>
+        {
+            b.HasKey(e => e.IdempotencyKey);
+            b.Property(e => e.IdempotencyKey).HasMaxLength(300);
+            b.Property(e => e.To).HasMaxLength(320).IsRequired();
+            b.Property(e => e.Subject).HasMaxLength(500);
         });
 
         modelBuilder.Entity<UserClaim>(b =>

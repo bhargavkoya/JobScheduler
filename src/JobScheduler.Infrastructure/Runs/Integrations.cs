@@ -43,7 +43,7 @@ public class HttpFinanceAppClient(HttpClient http) : IFinanceAppClient
     }
 }
 
-/// <summary>Placeholder until Gmail is wired in Phase 4. Logs instead of sending, and dedupes by idempotency key.</summary>
+/// <summary>Fallback when no Gmail credentials are configured. Logs instead of sending, and dedupes by idempotency key.</summary>
 public class LoggingEmailSender(ILogger<LoggingEmailSender> log) : IEmailSender
 {
     private readonly ConcurrentDictionary<string, byte> _sent = new();

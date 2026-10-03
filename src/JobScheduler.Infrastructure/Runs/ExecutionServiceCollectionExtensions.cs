@@ -38,7 +38,20 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<ICalculationEngine, RulesCalculationEngine>();
         services.AddScoped<RuleSeeder>();
 
-        services.AddSingleton<IEmailSender, LoggingEmailSender>();
+        var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
+        services.Configure<EmailOptions>(config.GetSection(EmailOptions.SectionName));
+        if (email.IsConfigured)
+        {
+            services.AddSingleton<IEmailTransport, SmtpEmailTransport>();
+            services.AddScoped<ISentEmailStore, EfSentEmailStore>();
+            services.AddScoped<IEmailSender, IdempotentEmailSender>();
+        }
+        else
+        {
+            // No Gmail credentials configured: log instead of sending so the app still runs and tests stay green.
+            services.AddSingleton<IEmailSender, LoggingEmailSender>();
+        }
+        services.AddScoped<IFailureNotifier, OwnerFailureNotifier>();
 
         // In-memory Quartz store: the database stays the source of truth and StartupRecovery rebuilds triggers.
         services.AddQuartz(q => q.UseInMemoryStore());

@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Text.Json;
 using JobScheduler.Application.Auth;
 using JobScheduler.Application.Common;
+using JobScheduler.Application.Runs;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Users;
 
@@ -16,7 +17,8 @@ public interface IJobService
     Task<JobDto> CancelAsync(Guid id, CancellationToken ct);
 }
 
-public class JobService(IJobStore jobs, ITemplateStore templates, ICurrentUser me, TimeProvider clock) : IJobService
+public class JobService(
+    IJobStore jobs, ITemplateStore templates, ICurrentUser me, TimeProvider clock, IJobScheduler scheduler) : IJobService
 {
     /// <summary>Schedule types that can actually be created in this phase.</summary>
     public static readonly IReadOnlySet<ScheduleType> CreatableScheduleTypes =
@@ -73,13 +75,16 @@ public class JobService(IJobStore jobs, ITemplateStore templates, ICurrentUser m
 
         await jobs.AddAsync(job, ct);
         await jobs.SaveChangesAsync(ct);
+
+        if (job.ScheduleType == ScheduleType.Fixed)
+            await scheduler.ScheduleFixedAsync(job.Id, job.RunAtUtc!.Value, ct);
         return job.ToDto();
     }
 
     public async Task<IReadOnlyList<JobDto>> ListAsync(JobFilter filter, CancellationToken ct)
     {
         var query = new JobQuery(
-            VisibleTeams(), filter.Status, filter.Team, filter.ScheduleType, filter.OwnerId,
+            JobAccess.VisibleTeams(me), filter.Status, filter.Team, filter.ScheduleType, filter.OwnerId,
             filter.CreatedFromUtc, filter.CreatedToUtc);
         return (await jobs.ListAsync(query, ct)).Select(j => j.ToDto()).ToList();
     }
@@ -102,26 +107,11 @@ public class JobService(IJobStore jobs, ITemplateStore templates, ICurrentUser m
         }
 
         await jobs.SaveChangesAsync(ct);
+        await scheduler.UnscheduleAsync(job.Id, ct);
         return job.ToDto();
     }
 
-    /// <summary>Null means every team. Otherwise: own team + observer teams.</summary>
-    private IReadOnlyCollection<Team>? VisibleTeams()
-    {
-        if (me.Role == Role.Admin || me.Permissions.Contains(Permissions.ViewOtherTeamsJobs))
-            return null;
-        return me.ObserverTeams.Append(me.Team).Distinct().ToList();
-    }
-
-    private async Task<Job> LoadVisibleAsync(Guid id, CancellationToken ct)
-    {
-        var job = await jobs.FindAsync(id, ct);
-        var visible = VisibleTeams();
-        // Hidden jobs look the same as missing ones so existence isn't leaked across teams.
-        if (job is null || (visible is not null && !visible.Contains(job.Team)))
-            throw new NotFoundException($"Job '{id}' was not found.");
-        return job;
-    }
+    private Task<Job> LoadVisibleAsync(Guid id, CancellationToken ct) => JobAccess.LoadVisibleAsync(jobs, me, id, ct);
 
     private static Dictionary<string, string> ValidateConfig(JobTemplate template, IReadOnlyDictionary<string, string>? supplied)
     {

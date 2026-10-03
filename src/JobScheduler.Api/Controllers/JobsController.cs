@@ -1,4 +1,6 @@
 using JobScheduler.Application.Jobs;
+using JobScheduler.Application.Runs;
+using JobScheduler.Infrastructure.Auth;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Users;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +11,7 @@ namespace JobScheduler.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("jobs")]
-public class JobsController(IJobService jobs) : ControllerBase
+public class JobsController(IJobService jobs, IJobRunService runs) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<JobDto>> Create(CreateJobRequest request, CancellationToken ct)
@@ -34,4 +36,19 @@ public class JobsController(IJobService jobs) : ControllerBase
 
     [HttpPost("{id:guid}/cancel")]
     public async Task<ActionResult<JobDto>> Cancel(Guid id, CancellationToken ct) => Ok(await jobs.CancelAsync(id, ct));
+
+    /// <summary>Manual kickoff. Send an Idempotency-Key header to make double-clicks and client retries safe.</summary>
+    [HttpPost("{id:guid}/run")]
+    public async Task<ActionResult<JobRunDto>> Run(
+        Guid id, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, CancellationToken ct) =>
+        Accepted(await runs.RunNowAsync(id, idempotencyKey, ct));
+
+    [Authorize(Policy = PolicyNames.CanRetry)]
+    [HttpPost("{id:guid}/retry")]
+    public async Task<ActionResult<JobRunDto>> Retry(Guid id, CancellationToken ct) =>
+        Accepted(await runs.RetryAsync(id, ct));
+
+    [HttpGet("{id:guid}/runs")]
+    public async Task<ActionResult<IReadOnlyList<JobRunDto>>> Runs(Guid id, CancellationToken ct) =>
+        Ok(await runs.ListRunsAsync(id, ct));
 }

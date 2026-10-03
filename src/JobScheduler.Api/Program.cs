@@ -2,7 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using JobScheduler.Api;
 using JobScheduler.Infrastructure.Auth;
+using JobScheduler.Api.Controllers;
 using JobScheduler.Infrastructure.Jobs;
+using JobScheduler.Infrastructure.Runs;
 using JobScheduler.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +30,9 @@ builder.Services.AddDbContext<JobSchedulerDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddAuthInfrastructure();
+builder.Services.AddExecutionInfrastructure(builder.Configuration);
+builder.Services.Configure<FinanceStubOptions>(builder.Configuration.GetSection(FinanceStubOptions.SectionName));
+builder.Services.AddSingleton<MockFinanceState>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 if (jwtOptions.Key.Length < 32)

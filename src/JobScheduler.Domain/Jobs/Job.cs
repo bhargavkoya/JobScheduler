@@ -25,6 +25,28 @@ public class Job
     /// <summary>Jobs that haven't started or are waiting on a human can still be cancelled.</summary>
     public bool CanCancel => Status is JobStatus.Scheduled or JobStatus.NeedsManualAction;
 
+    /// <summary>Queued or retrying. Allowed from Scheduled (first run) or Failed (manual retry).</summary>
+    public void MarkInProgress()
+    {
+        if (Status is not (JobStatus.Scheduled or JobStatus.Failed))
+            throw new InvalidJobStateException($"A job in status '{Status}' cannot be started.");
+        Status = JobStatus.InProgress;
+    }
+
+    public void MarkCompleted()
+    {
+        if (Status != JobStatus.InProgress)
+            throw new InvalidJobStateException($"A job in status '{Status}' cannot be completed.");
+        Status = JobStatus.Completed;
+    }
+
+    public void MarkFailed()
+    {
+        if (Status != JobStatus.InProgress)
+            throw new InvalidJobStateException($"A job in status '{Status}' cannot be failed.");
+        Status = JobStatus.Failed;
+    }
+
     public void Cancel()
     {
         if (!CanCancel)

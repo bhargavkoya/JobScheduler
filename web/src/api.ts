@@ -61,6 +61,33 @@ export interface Job {
   canCancel: boolean
 }
 
+export type RunStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed'
+export type PipelineStep = 'DownloadReport' | 'Calculate' | 'SendEmail'
+
+export interface RunStep {
+  step: PipelineStep
+  status: 'Succeeded' | 'Failed'
+  attempt: number
+  output: string
+  startedAtUtc: string
+  finishedAtUtc: string
+}
+
+export interface JobRun {
+  id: string
+  jobId: string
+  idempotencyKey: string
+  status: RunStatus
+  attempt: number
+  autoRetriesUsed: number
+  error: string | null
+  failedStep: PipelineStep | null
+  createdAtUtc: string
+  startedAtUtc: string | null
+  finishedAtUtc: string | null
+  steps: RunStep[]
+}
+
 export interface CreateJobPayload {
   templateId: string
   name: string
@@ -80,6 +107,13 @@ export class ApiError extends Error {
     super(message)
     this.status = status
   }
+}
+
+/** Server timestamps are UTC; the app shows everything in IST. */
+export function formatInstantIst(utc: string | null): string {
+  if (!utc) return '—'
+  const value = /[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`
+  return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST'
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {

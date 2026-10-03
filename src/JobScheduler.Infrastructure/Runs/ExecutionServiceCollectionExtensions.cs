@@ -1,3 +1,4 @@
+using JobScheduler.Application.Calculation;
 using JobScheduler.Application.Runs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,16 @@ public static class ExecutionServiceCollectionExtensions
             client.BaseAddress = new Uri(finance.BaseUrl);
             client.Timeout = TimeSpan.FromSeconds(10);
         });
-        services.AddSingleton<ICalculationEngine, NoOpCalculationEngine>();
+
+        services.AddSingleton<IRule, SumAmountRule>();
+        services.AddSingleton<IRule, ThresholdRule>();
+        services.AddSingleton<IRule, VarianceRule>();
+        services.AddSingleton<IRuleRegistry, RuleRegistry>();
+        services.AddScoped<IRuleStore, EfRuleStore>();
+        services.AddScoped<IRuleService, RuleService>();
+        services.AddScoped<ICalculationEngine, RulesCalculationEngine>();
+        services.AddScoped<RuleSeeder>();
+
         services.AddSingleton<IEmailSender, LoggingEmailSender>();
 
         // In-memory Quartz store: the database stays the source of truth and StartupRecovery rebuilds triggers.

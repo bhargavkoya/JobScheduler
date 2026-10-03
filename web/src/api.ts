@@ -42,6 +42,7 @@ export interface Template {
   fields: TemplateField[]
   defaultRetryPolicy: RetryPolicy
   isApproved: boolean
+  requiresApproval: boolean
 }
 
 export interface Job {
@@ -59,6 +60,28 @@ export interface Job {
   config: Record<string, string>
   createdAtUtc: string
   canCancel: boolean
+  requiresApproval: boolean
+  approverUserId: string | null
+  statusChangedAtUtc: string
+  isAtRisk: boolean
+  atRiskReason: string | null
+}
+
+export interface ManualActionItem {
+  job: Job
+  approverEmail: string | null
+  canDecide: boolean
+}
+
+export interface Approval {
+  id: string
+  jobId: string
+  runId: string | null
+  approverUserId: string
+  approverEmail: string | null
+  decision: 'Approved' | 'Rejected'
+  comment: string
+  decidedAtUtc: string
 }
 
 export type RunStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed'

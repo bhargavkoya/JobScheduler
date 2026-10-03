@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, type Job, type JobStatus, type ScheduleType, type Team } from '../api'
 import { useAuth } from '../auth/AuthContext'
 import { CreateJobForm } from './CreateJobForm'
+import { ApprovalHistory } from './ApprovalHistory'
 import { RunHistory } from './RunHistory'
+import { AtRiskBadge, StatusBadge } from './StatusBadge'
+import { STATUS_LABELS } from './statusLabels'
 
 const STATUSES: JobStatus[] = ['Scheduled', 'InProgress', 'Completed', 'Cancelled', 'Failed', 'NeedsManualAction']
 const TEAMS: Team[] = ['Business', 'Technical']
@@ -15,6 +18,11 @@ function formatIst(value: string | null) {
 export function JobsPage() {
   const { token, user } = useAuth()
   const [jobs, setJobs] = useState<Job[]>([])
+  const [allJobs, setAllJobs] = useState<Job[]>([]) // unfiltered, for the summary strip
+  const [mineOnly, setMineOnly] = useState(false)
+  const [atRiskOnly, setAtRiskOnly] = useState(false)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [status, setStatus] = useState('')
   const [team, setTeam] = useState('')
   const [type, setType] = useState('')
@@ -30,17 +38,25 @@ export function JobsPage() {
       if (status) params.set('status', status)
       if (team) params.set('team', team)
       if (type) params.set('type', type)
-      return apiFetch<Job[]>(`/jobs?${params}`, { signal }, token)
-        .then((list) => {
+      if (mineOnly && user) params.set('ownerId', user.id)
+      // Dates are picked as IST calendar days; send them as UTC instants.
+      if (from) params.set('createdFromUtc', new Date(`${from}T00:00:00+05:30`).toISOString())
+      if (to) params.set('createdToUtc', new Date(`${to}T23:59:59+05:30`).toISOString())
+      return Promise.all([
+        apiFetch<Job[]>(`/jobs?${params}`, { signal }, token),
+        apiFetch<Job[]>('/jobs', { signal }, token),
+      ])
+        .then(([list, everything]) => {
           setError(null)
           setJobs(list)
+          setAllJobs(everything)
         })
         .catch((err: unknown) => {
           if (signal?.aborted) return
           setError(err instanceof Error ? err.message : 'Failed to load jobs')
         })
     },
-    [token, status, team, type],
+    [token, user, status, team, type, mineOnly, from, to],
   )
 
   useEffect(() => {
@@ -49,8 +65,10 @@ export function JobsPage() {
     return () => controller.abort()
   }, [load])
 
+  const shown = atRiskOnly ? jobs.filter((j) => j.isAtRisk) : jobs
   const selected = jobs.find((j) => j.id === selectedId) ?? null
   const anyInProgress = jobs.some((j) => j.status === 'InProgress')
+  const atRiskCount = allJobs.filter((j) => j.isAtRisk).length
 
   // Keep statuses live while anything is running.
   useEffect(() => {
@@ -79,6 +97,35 @@ export function JobsPage() {
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap gap-2" aria-label="Job summary">
+        {STATUSES.map((s) => {
+          const count = allJobs.filter((j) => j.status === s).length
+          return (
+            <button
+              key={s}
+              onClick={() => setStatus(status === s ? '' : s)}
+              className={
+                'rounded-lg border px-3 py-1.5 text-left text-xs ' +
+                (status === s ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50')
+              }
+            >
+              <div className="text-lg font-semibold text-slate-800">{count}</div>
+              <div className="text-slate-500">{STATUS_LABELS[s]}</div>
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setAtRiskOnly((v) => !v)}
+          className={
+            'rounded-lg border px-3 py-1.5 text-left text-xs ' +
+            (atRiskOnly ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-white hover:bg-slate-50')
+          }
+        >
+          <div className="text-lg font-semibold text-orange-700">{atRiskCount}</div>
+          <div className="text-slate-500">At risk</div>
+        </button>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value)} className={select}>
           <option value="">All statuses</option>
@@ -98,6 +145,18 @@ export function JobsPage() {
             <option key={s}>{s}</option>
           ))}
         </select>
+        <label className="flex items-center gap-1 text-sm text-slate-600">
+          From
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={select} />
+        </label>
+        <label className="flex items-center gap-1 text-sm text-slate-600">
+          To
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={select} />
+        </label>
+        <label className="flex items-center gap-1 text-sm text-slate-600">
+          <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} />
+          My jobs
+        </label>
         <button
           onClick={() => setCreating(true)}
           className="ml-auto rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
@@ -131,14 +190,14 @@ export function JobsPage() {
             </tr>
           </thead>
           <tbody>
-            {jobs.length === 0 && (
+            {shown.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
                   No jobs match.
                 </td>
               </tr>
             )}
-            {jobs.map((j) => (
+            {shown.map((j) => (
               <tr
                 key={j.id}
                 onClick={() => setSelectedId(j.id)}
@@ -149,7 +208,10 @@ export function JobsPage() {
                 <td className="px-3 py-2">{j.scheduleType === 'Manual' ? 'Manual kickoff' : j.scheduleType}</td>
                 <td className="px-3 py-2">{formatIst(j.runAtIst)}</td>
                 <td className="px-3 py-2">{j.team}</td>
-                <td className="px-3 py-2">{j.status}</td>
+                <td className="px-3 py-2">
+                  <StatusBadge status={j.status} />
+                  <AtRiskBadge job={j} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -193,6 +255,9 @@ export function JobsPage() {
               </button>
             </div>
           </div>
+          {selected.isAtRisk && (
+            <p className="rounded bg-orange-50 px-3 py-2 text-orange-800">At risk: {selected.atRiskReason}</p>
+          )}
           <p>
             {selected.templateName} · {selected.status} · retries {selected.retryPolicy.maxAutoRetries} ×{' '}
             {selected.retryPolicy.backoffSeconds}s (exponential)
@@ -205,6 +270,12 @@ export function JobsPage() {
               </div>
             ))}
           </dl>
+          {selected.requiresApproval && (
+            <div>
+              <h4 className="mb-2 font-medium text-slate-800">Approvals</h4>
+              <ApprovalHistory jobId={selected.id} status={selected.status} refreshKey={runsRefresh} />
+            </div>
+          )}
           <div>
             <h4 className="mb-2 font-medium text-slate-800">Run history</h4>
             <RunHistory jobId={selected.id} status={selected.status} refreshKey={runsRefresh} />

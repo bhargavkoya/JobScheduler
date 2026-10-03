@@ -14,6 +14,7 @@ public class JobRunner(
     IJobStore jobs,
     IEnumerable<IPipelineStep> pipeline,
     IJobQueue queue,
+    IFailureNotifier failureNotifier,
     TimeProvider clock,
     ILogger<JobRunner> log)
 {
@@ -114,6 +115,16 @@ public class JobRunner(
         run.FinishedAtUtc = Now();
         job.MarkFailed();
         await SaveAsync(ct);
+
+        // The job is already Failed and saved; a mail problem must not change that or fail the worker.
+        try
+        {
+            await failureNotifier.NotifyFailedAsync(job, run, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Run {RunId}: could not send the failure notification.", run.Id);
+        }
     }
 
     /// <summary>backoff * 2^(retry-1), capped at the policy limit.</summary>

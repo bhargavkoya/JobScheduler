@@ -47,6 +47,23 @@ cd web && npm install && npm run dev
 
 Frontend dev server: http://localhost:5173 — backend API: http://localhost:5031.
 
+## Email (Gmail) and calculation rules
+
+Email is sent through Gmail SMTP with MailKit. Without credentials the app still runs and just logs "STUB EMAIL" lines instead of sending.
+
+1. In your Google account turn on 2-Step Verification, then create an **App password** (Google Account > Security > App passwords).
+2. Store it as a local secret (never commit it):
+
+```bash
+dotnet user-secrets set "Email:Username" "you@gmail.com" --project src/JobScheduler.Api
+dotnet user-secrets set "Email:Password" "<16-char app password>" --project src/JobScheduler.Api
+```
+
+(Or set the `Email__Username` / `Email__Password` environment variables.) Restart the API after changing them.
+
+- Each email has an idempotency key and is recorded in `SentEmails`, so a retried run does not send twice. Terminal job failures email the job owner once per failed attempt.
+- Calculation rules are data (`/admin/rules`, admin only). A job lists rule names in its `rules` field, comma-separated, for example `Total Position, Exposure Cap, Variance vs Ledger`. Seeded rule types: `SumAmount`, `Threshold`, `Variance`.
+
 ## Commands
 
 - `docker compose up -d` — start Postgres

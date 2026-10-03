@@ -3,6 +3,7 @@ using System;
 using JobScheduler.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JobScheduler.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JobSchedulerDbContext))]
-    partial class JobSchedulerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261003230530_AddCalculationRules")]
+    partial class AddCalculationRules
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -242,30 +245,6 @@ namespace JobScheduler.Infrastructure.Persistence.Migrations
                     b.HasIndex("RunId");
 
                     b.ToTable("JobRunSteps");
-                });
-
-            modelBuilder.Entity("JobScheduler.Domain.Runs.SentEmail", b =>
-                {
-                    b.Property<string>("IdempotencyKey")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<DateTime>("SentAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Subject")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("To")
-                        .IsRequired()
-                        .HasMaxLength(320)
-                        .HasColumnType("character varying(320)");
-
-                    b.HasKey("IdempotencyKey");
-
-                    b.ToTable("SentEmails");
                 });
 
             modelBuilder.Entity("JobScheduler.Domain.Users.User", b =>

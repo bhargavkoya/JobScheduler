@@ -18,7 +18,8 @@ public class TemplateSeeder(JobSchedulerDbContext db)
             [
                 Field("reportName", "Report name", FieldType.String, true),
                 Field("recipients", "Result recipient", FieldType.Email, true),
-                Field("toleranceAmount", "Tolerance amount", FieldType.Number, true)
+                Field("toleranceAmount", "Tolerance amount", FieldType.Number, true),
+                RulesField
             ],
             DefaultRetryPolicy = new RetryPolicy { MaxAutoRetries = 3, BackoffSeconds = 30 },
             IsApproved = true
@@ -66,7 +67,18 @@ public class TemplateSeeder(JobSchedulerDbContext db)
         }, ct);
 
         await db.SaveChangesAsync(ct);
+
+        // Databases seeded before the rules engine existed: add the new field to the existing template.
+        var recon = await db.JobTemplates.FirstAsync(t => t.Name == "Daily Reconciliation Report", ct);
+        if (recon.Fields.All(f => f.Name != RulesField.Name))
+        {
+            recon.Fields = [.. recon.Fields, RulesField];
+            await db.SaveChangesAsync(ct);
+        }
     }
+
+    private static TemplateField RulesField =>
+        Field("rules", "Calculation rules (comma-separated names)", FieldType.String, false);
 
     private static TemplateField Field(string name, string label, FieldType type, bool required) =>
         new() { Name = name, Label = label, Type = type, Required = required };

@@ -18,6 +18,8 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<JobRun> JobRuns => Set<JobRun>();
     public DbSet<JobRunStep> JobRunSteps => Set<JobRunStep>();
+    public DbSet<CalculationRule> CalculationRules => Set<CalculationRule>();
+    public DbSet<SentEmail> SentEmails => Set<SentEmail>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -87,6 +89,24 @@ public class JobSchedulerDbContext : DbContext
             b.Property(st => st.Id).ValueGeneratedNever();
             b.Property(st => st.Step).HasConversion<string>().HasMaxLength(32);
             b.Property(st => st.Status).HasConversion<string>().HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<CalculationRule>(b =>
+        {
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(200).IsRequired();
+            b.HasIndex(r => r.Name).IsUnique();
+            b.Property(r => r.Description).HasMaxLength(2000);
+            b.Property(r => r.Type).HasMaxLength(64).IsRequired();
+            b.Property(r => r.ParametersJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<SentEmail>(b =>
+        {
+            b.HasKey(e => e.IdempotencyKey);
+            b.Property(e => e.IdempotencyKey).HasMaxLength(300);
+            b.Property(e => e.To).HasMaxLength(320).IsRequired();
+            b.Property(e => e.Subject).HasMaxLength(500);
         });
 
         modelBuilder.Entity<UserClaim>(b =>

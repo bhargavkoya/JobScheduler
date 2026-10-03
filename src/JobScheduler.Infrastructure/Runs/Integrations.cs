@@ -43,17 +43,7 @@ public class HttpFinanceAppClient(HttpClient http) : IFinanceAppClient
     }
 }
 
-/// <summary>Placeholder until the rules engine lands in Phase 4. Deliberately contains no formulas.</summary>
-public class NoOpCalculationEngine : ICalculationEngine
-{
-    public Task<CalculationResult> CalculateAsync(
-        Guid jobId, ReportData report, IReadOnlyDictionary<string, string> config, CancellationToken ct) =>
-        Task.FromResult(new CalculationResult(
-            $"No calculation rules configured yet (rule engine arrives in Phase 4). Report {report.ReportId} has {report.Rows.Count} rows.",
-            new Dictionary<string, decimal>()));
-}
-
-/// <summary>Placeholder until Gmail is wired in Phase 4. Logs instead of sending, and dedupes by idempotency key.</summary>
+/// <summary>Fallback when no Gmail credentials are configured. Logs instead of sending, and dedupes by idempotency key.</summary>
 public class LoggingEmailSender(ILogger<LoggingEmailSender> log) : IEmailSender
 {
     private readonly ConcurrentDictionary<string, byte> _sent = new();

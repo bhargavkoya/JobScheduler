@@ -61,13 +61,16 @@ public class SendEmailStep(IEmailSender email) : IPipelineStep
             ? JsonSerializer.Deserialize<CalculationResult>(calc)?.Summary
             : null;
 
-        await email.SendAsync(
-            new EmailMessage(
-                recipient,
-                $"[Job Scheduler] {context.Job.Name} completed",
-                $"Job '{context.Job.Name}' finished its run.\n\n{summary}",
-                $"{context.Run.IdempotencyKey}:email"),
-            ct);
+        // For approval jobs this email doubles as the approval request, so the approver is not mailed twice.
+        var needsApproval = context.Job.Template?.RequiresApproval == true;
+        var subject = needsApproval
+            ? $"[Job Scheduler] Approval needed: {context.Job.Name}"
+            : $"[Job Scheduler] {context.Job.Name} completed";
+        var body = needsApproval
+            ? $"Job '{context.Job.Name}' is ready and needs your approval.\n\n{summary}\n\nOpen the Manual Action queue in the dashboard to approve or reject it."
+            : $"Job '{context.Job.Name}' finished its run.\n\n{summary}";
+
+        await email.SendAsync(new EmailMessage(recipient, subject, body, $"{context.Run.IdempotencyKey}:email"), ct);
         return $"Email sent to {recipient}.";
     }
 }

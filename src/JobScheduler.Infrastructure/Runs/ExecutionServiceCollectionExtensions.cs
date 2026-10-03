@@ -1,4 +1,6 @@
+using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Calculation;
+using JobScheduler.Application.Jobs;
 using JobScheduler.Application.Runs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,6 +54,12 @@ public static class ExecutionServiceCollectionExtensions
             services.AddSingleton<IEmailSender, LoggingEmailSender>();
         }
         services.AddScoped<IFailureNotifier, OwnerFailureNotifier>();
+
+        services.AddScoped<IApprovalStore, EfApprovalStore>();
+        services.AddScoped<IApprovalService, ApprovalService>();
+        services.AddScoped<IApprovalFollowUp, ApprovalFollowUp>();
+        var atRiskMinutes = config.GetValue<int?>("AtRisk:ThresholdMinutes") ?? 15;
+        services.AddSingleton(new AtRiskPolicy(TimeSpan.FromMinutes(Math.Max(1, atRiskMinutes))));
 
         // In-memory Quartz store: the database stays the source of truth and StartupRecovery rebuilds triggers.
         services.AddQuartz(q => q.UseInMemoryStore());

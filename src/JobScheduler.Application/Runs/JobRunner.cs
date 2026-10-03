@@ -1,3 +1,4 @@
+using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Jobs;
 using JobScheduler.Domain.Runs;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ public class JobRunner(
     IEnumerable<IPipelineStep> pipeline,
     IJobQueue queue,
     IFailureNotifier failureNotifier,
+    IApprovalFollowUp followUp,
     TimeProvider clock,
     ILogger<JobRunner> log)
 {
@@ -88,8 +90,25 @@ public class JobRunner(
         run.Error = null;
         run.FailedStep = null;
         run.FinishedAtUtc = Now();
-        job.MarkCompleted();
+
+        // Approval templates stop here and wait for the single approver; everything else is done.
+        var needsApproval = job.Template?.RequiresApproval == true;
+        if (needsApproval) job.RequestApproval(); else job.MarkCompleted();
         await SaveAsync(ct);
+
+        if (needsApproval) await ScheduleFollowUpAsync(job, ct);
+    }
+
+    private async Task ScheduleFollowUpAsync(Domain.Jobs.Job job, CancellationToken ct)
+    {
+        try
+        {
+            await followUp.ScheduleAsync(job, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Job {JobId}: could not schedule the approval follow-up.", job.Id);
+        }
     }
 
     private async Task HandleFailureAsync(

@@ -30,6 +30,11 @@ public class EfJobStore(JobSchedulerDbContext db) : IJobStore
             .Where(j => j.Status == JobStatus.Scheduled && j.ScheduleType == ScheduleType.Fixed && j.RunAtUtc != null)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Job>> ListNeedingManualActionAsync(CancellationToken ct) =>
+        await db.Jobs.AsNoTracking().Include(j => j.Template)
+            .Where(j => j.Status == JobStatus.NeedsManualAction)
+            .ToListAsync(ct);
+
     public async Task AddAsync(Job job, CancellationToken ct) => await db.Jobs.AddAsync(job, ct);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

@@ -20,6 +20,7 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<JobRunStep> JobRunSteps => Set<JobRunStep>();
     public DbSet<CalculationRule> CalculationRules => Set<CalculationRule>();
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
+    public DbSet<JobApproval> JobApprovals => Set<JobApproval>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +65,7 @@ public class JobSchedulerDbContext : DbContext
             b.OwnsOne(j => j.RetryPolicy);
             b.HasOne(j => j.Template).WithMany().HasForeignKey(j => j.TemplateId).OnDelete(DeleteBehavior.Restrict);
             b.HasOne<User>().WithMany().HasForeignKey(j => j.OwnerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<User>().WithMany().HasForeignKey(j => j.ApproverUserId).OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(j => j.Status);
             b.HasIndex(j => new { j.Team, j.CreatedAtUtc });
         });
@@ -99,6 +101,16 @@ public class JobSchedulerDbContext : DbContext
             b.Property(r => r.Description).HasMaxLength(2000);
             b.Property(r => r.Type).HasMaxLength(64).IsRequired();
             b.Property(r => r.ParametersJson).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<JobApproval>(b =>
+        {
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Decision).HasConversion<string>().HasMaxLength(32);
+            b.Property(a => a.Comment).HasMaxLength(2000);
+            b.HasIndex(a => a.JobId);
+            b.HasOne<Job>().WithMany().HasForeignKey(a => a.JobId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<User>().WithMany().HasForeignKey(a => a.ApproverUserId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SentEmail>(b =>

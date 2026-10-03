@@ -65,6 +65,7 @@ public class TemplateService(ITemplateStore templates) : ITemplateService
             .ToList();
         var retry = r.DefaultRetryPolicy ?? new RetryPolicyDto(3, 30);
         template.DefaultRetryPolicy = new RetryPolicy { MaxAutoRetries = retry.MaxAutoRetries, BackoffSeconds = retry.BackoffSeconds };
+        template.RequiresApproval = r.RequiresApproval;
     }
 
     private async Task ValidateAsync(SaveTemplateRequest r, Guid? existingId, CancellationToken ct)

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { API_BASE_URL } from './api'
+import { API_BASE_URL, apiFetch, type ManualActionItem } from './api'
 import { useAuth } from './auth/AuthContext'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { CatalogPage } from './jobs/CatalogPage'
 import { JobsPage } from './jobs/JobsPage'
+import { ManualQueuePage } from './jobs/ManualQueuePage'
 
 type HealthState =
   | { status: 'loading' }
@@ -49,8 +50,27 @@ function Health() {
 }
 
 function Home() {
-  const { user, logout } = useAuth()
-  const [tab, setTab] = useState<'jobs' | 'catalog' | 'access'>('jobs')
+  const { user, token, logout } = useAuth()
+  const [tab, setTab] = useState<'jobs' | 'queue' | 'catalog' | 'access'>('jobs')
+  const [queueCount, setQueueCount] = useState(0)
+  const [queueTick, setQueueTick] = useState(0)
+
+  // Badge on the Manual actions tab: how many jobs are waiting on a human right now.
+  useEffect(() => {
+    if (!user) return
+    const controller = new AbortController()
+    const load = () =>
+      apiFetch<ManualActionItem[]>('/jobs/manual-queue', { signal: controller.signal }, token)
+        .then((list) => setQueueCount(list.length))
+        .catch(() => undefined)
+    void load()
+    const timer = setInterval(() => void load(), 10000)
+    return () => {
+      controller.abort()
+      clearInterval(timer)
+    }
+  }, [user, token, queueTick])
+
   if (!user) return null
 
   return (
@@ -70,6 +90,7 @@ function Home() {
       <nav className="flex gap-1 border-b border-slate-200 bg-white px-6">
         {([
           ['jobs', 'Jobs'],
+          ['queue', 'Manual actions'],
           ['catalog', 'Catalog'],
           ['access', 'My access'],
         ] as const).map(([key, label]) => (
@@ -82,12 +103,16 @@ function Home() {
             }
           >
             {label}
+            {key === 'queue' && queueCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-xs font-medium text-white">{queueCount}</span>
+            )}
           </button>
         ))}
       </nav>
 
-      <main className="mx-auto max-w-4xl space-y-4 p-6">
+      <main className="mx-auto max-w-5xl space-y-4 p-6">
         {tab === 'jobs' && <JobsPage />}
+        {tab === 'queue' && <ManualQueuePage onChanged={() => setQueueTick((n) => n + 1)} />}
         {tab === 'catalog' && <CatalogPage />}
         {tab === 'access' && (
           <>

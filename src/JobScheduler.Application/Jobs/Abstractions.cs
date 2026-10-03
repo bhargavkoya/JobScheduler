@@ -25,6 +25,8 @@ public interface IJobStore
 {
     Task<Job?> FindAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyList<Job>> ListAsync(JobQuery query, CancellationToken ct);
+    /// <summary>Scheduled Fixed jobs with a run time (used to rebuild triggers on startup).</summary>
+    Task<IReadOnlyList<Job>> ListScheduledFixedAsync(CancellationToken ct);
     Task AddAsync(Job job, CancellationToken ct);
     Task SaveChangesAsync(CancellationToken ct);
 }

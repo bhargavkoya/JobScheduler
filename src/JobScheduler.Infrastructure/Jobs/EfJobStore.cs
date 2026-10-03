@@ -25,6 +25,11 @@ public class EfJobStore(JobSchedulerDbContext db) : IJobStore
         return await query.OrderByDescending(j => j.CreatedAtUtc).ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Job>> ListScheduledFixedAsync(CancellationToken ct) =>
+        await db.Jobs.AsNoTracking()
+            .Where(j => j.Status == JobStatus.Scheduled && j.ScheduleType == ScheduleType.Fixed && j.RunAtUtc != null)
+            .ToListAsync(ct);
+
     public async Task AddAsync(Job job, CancellationToken ct) => await db.Jobs.AddAsync(job, ct);
 
     public Task SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);

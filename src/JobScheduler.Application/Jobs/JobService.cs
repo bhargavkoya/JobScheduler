@@ -18,7 +18,8 @@ public interface IJobService
 }
 
 public class JobService(
-    IJobStore jobs, ITemplateStore templates, ICurrentUser me, TimeProvider clock, IJobScheduler scheduler) : IJobService
+    IJobStore jobs, ITemplateStore templates, ICurrentUser me, TimeProvider clock, IJobScheduler scheduler,
+    IUserStore users, AtRiskPolicy atRisk) : IJobService
 {
     /// <summary>Schedule types that can actually be created in this phase.</summary>
     public static readonly IReadOnlySet<ScheduleType> CreatableScheduleTypes =
@@ -54,6 +55,7 @@ public class JobService(
         }
 
         var config = ValidateConfig(template, request.Config);
+        var approverId = await ResolveApproverAsync(template, config, ct);
         RetryValidation.Validate(request.RetryPolicy);
         var retry = request.RetryPolicy
             ?? new RetryPolicyDto(template.DefaultRetryPolicy.MaxAutoRetries, template.DefaultRetryPolicy.BackoffSeconds);
@@ -70,7 +72,9 @@ public class JobService(
             OwnerId = me.UserId,
             Team = me.Team,
             Status = JobStatus.Scheduled,
-            CreatedAtUtc = clock.GetUtcNow().UtcDateTime
+            ApproverUserId = approverId,
+            CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
+            StatusChangedAtUtc = clock.GetUtcNow().UtcDateTime
         };
 
         await jobs.AddAsync(job, ct);
@@ -78,7 +82,7 @@ public class JobService(
 
         if (job.ScheduleType == ScheduleType.Fixed)
             await scheduler.ScheduleFixedAsync(job.Id, job.RunAtUtc!.Value, ct);
-        return job.ToDto();
+        return job.ToDto(Now(), atRisk);
     }
 
     public async Task<IReadOnlyList<JobDto>> ListAsync(JobFilter filter, CancellationToken ct)
@@ -86,10 +90,10 @@ public class JobService(
         var query = new JobQuery(
             JobAccess.VisibleTeams(me), filter.Status, filter.Team, filter.ScheduleType, filter.OwnerId,
             filter.CreatedFromUtc, filter.CreatedToUtc);
-        return (await jobs.ListAsync(query, ct)).Select(j => j.ToDto()).ToList();
+        return (await jobs.ListAsync(query, ct)).Select(j => j.ToDto(Now(), atRisk)).ToList();
     }
 
-    public async Task<JobDto> GetAsync(Guid id, CancellationToken ct) => (await LoadVisibleAsync(id, ct)).ToDto();
+    public async Task<JobDto> GetAsync(Guid id, CancellationToken ct) => (await LoadVisibleAsync(id, ct)).ToDto(Now(), atRisk);
 
     public async Task<JobDto> CancelAsync(Guid id, CancellationToken ct)
     {
@@ -108,7 +112,25 @@ public class JobService(
 
         await jobs.SaveChangesAsync(ct);
         await scheduler.UnscheduleAsync(job.Id, ct);
-        return job.ToDto();
+        return job.ToDto(Now(), atRisk);
+    }
+
+    private DateTime Now() => clock.GetUtcNow().UtcDateTime;
+
+    /// <summary>Single approver: the template's approverEmail must be a registered user who is allowed to approve.</summary>
+    private async Task<Guid?> ResolveApproverAsync(JobTemplate template, IReadOnlyDictionary<string, string> config, CancellationToken ct)
+    {
+        if (!template.RequiresApproval) return null;
+
+        var email = config.FirstOrDefault(kv => string.Equals(kv.Key, "approverEmail", StringComparison.OrdinalIgnoreCase)).Value;
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ValidationException($"Template '{template.Name}' requires approval, so it needs an 'approverEmail' field.");
+
+        var approver = await users.FindByEmailAsync(AuthService.NormalizeEmail(email), ct)
+            ?? throw new ValidationException($"Approver '{email}' is not a registered user.");
+        if (approver.Role != Role.Admin && approver.Claims.All(c => c.Permission != Permissions.ApproveJobs))
+            throw new ValidationException($"'{email}' does not have permission to approve jobs.");
+        return approver.Id;
     }
 
     private Task<Job> LoadVisibleAsync(Guid id, CancellationToken ct) => JobAccess.LoadVisibleAsync(jobs, me, id, ct);

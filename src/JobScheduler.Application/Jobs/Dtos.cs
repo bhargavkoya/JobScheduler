@@ -13,14 +13,16 @@ public sealed record TemplateDto(
     IReadOnlyList<ScheduleType> SupportedScheduleTypes,
     IReadOnlyList<TemplateFieldDto> Fields,
     RetryPolicyDto DefaultRetryPolicy,
-    bool IsApproved);
+    bool IsApproved,
+    bool RequiresApproval);
 
 public sealed record SaveTemplateRequest(
     string Name,
     string? Description,
     IReadOnlyList<ScheduleType> SupportedScheduleTypes,
     IReadOnlyList<TemplateFieldDto> Fields,
-    RetryPolicyDto? DefaultRetryPolicy);
+    RetryPolicyDto? DefaultRetryPolicy,
+    bool RequiresApproval = false);
 
 public sealed record CreateJobRequest(
     Guid TemplateId,
@@ -53,4 +55,9 @@ public sealed record JobDto(
     RetryPolicyDto RetryPolicy,
     IReadOnlyDictionary<string, string> Config,
     DateTime CreatedAtUtc,
-    bool CanCancel);
+    bool CanCancel,
+    bool RequiresApproval,
+    Guid? ApproverUserId,
+    DateTime StatusChangedAtUtc,
+    bool IsAtRisk,
+    string? AtRiskReason);

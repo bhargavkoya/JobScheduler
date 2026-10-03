@@ -34,10 +34,12 @@ public class TemplateSeeder(JobSchedulerDbContext db)
             [
                 Field("portfolio", "Portfolio", FieldType.String, true),
                 Field("approverEmail", "Approver email", FieldType.Email, true),
-                Field("amount", "Amount", FieldType.Number, true)
+                Field("amount", "Amount", FieldType.Number, true),
+                FollowUpField
             ],
             DefaultRetryPolicy = new RetryPolicy { MaxAutoRetries = 1, BackoffSeconds = 60 },
-            IsApproved = true
+            IsApproved = true,
+            RequiresApproval = true
         }, ct);
 
         await AddIfMissingAsync(new JobTemplate
@@ -75,7 +77,20 @@ public class TemplateSeeder(JobSchedulerDbContext db)
             recon.Fields = [.. recon.Fields, RulesField];
             await db.SaveChangesAsync(ct);
         }
+
+        // Same for the approval template: it gained RequiresApproval and the follow-up field in Phase 5.
+        var approval = await db.JobTemplates.FirstAsync(t => t.Name == "Capital Allocation Approval", ct);
+        if (!approval.RequiresApproval || approval.Fields.All(f => f.Name != FollowUpField.Name))
+        {
+            approval.RequiresApproval = true;
+            if (approval.Fields.All(f => f.Name != FollowUpField.Name))
+                approval.Fields = [.. approval.Fields, FollowUpField];
+            await db.SaveChangesAsync(ct);
+        }
     }
+
+    private static TemplateField FollowUpField =>
+        Field("followUpAfterMinutes", "Remind approver if no action after (minutes)", FieldType.Number, false);
 
     private static TemplateField RulesField =>
         Field("rules", "Calculation rules (comma-separated names)", FieldType.String, false);

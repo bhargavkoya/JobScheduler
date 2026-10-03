@@ -33,6 +33,11 @@ public interface IJobQueue
 public interface IJobScheduler
 {
     Task ScheduleFixedAsync(Guid jobId, DateTime runAtUtc, CancellationToken ct);
+
+    /// <summary>One-shot chaser for a job waiting on a manual action. Replaces any existing one for the job.</summary>
+    Task ScheduleFollowUpAsync(Guid jobId, DateTime dueUtc, CancellationToken ct);
+
+    /// <summary>Removes both the fixed-run trigger and the follow-up trigger for the job.</summary>
     Task UnscheduleAsync(Guid jobId, CancellationToken ct);
 }
 

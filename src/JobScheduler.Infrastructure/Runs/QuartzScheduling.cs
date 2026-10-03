@@ -1,3 +1,4 @@
+using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Common;
 using JobScheduler.Application.Runs;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,11 +32,35 @@ public class FireJobRunJob(IServiceScopeFactory scopes, ILogger<FireJobRunJob> l
     }
 }
 
+/// <summary>Fires the approval chaser when due. The follow-up itself decides whether anything still needs sending.</summary>
+[DisallowConcurrentExecution]
+public class FollowUpJob(IServiceScopeFactory scopes, ILogger<FollowUpJob> log) : IJob
+{
+    public const string JobIdKey = "jobId";
+
+    public async Task Execute(IJobExecutionContext context)
+    {
+        var jobId = Guid.Parse(context.MergedJobDataMap.GetString(JobIdKey)!);
+        await using var scope = scopes.CreateAsyncScope();
+        try
+        {
+            await scope.ServiceProvider.GetRequiredService<IApprovalFollowUp>().FireAsync(jobId, context.CancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Follow-up for job {JobId} failed.", jobId);
+        }
+    }
+}
+
 public class QuartzJobScheduler(ISchedulerFactory factory, TimeProvider clock) : IJobScheduler
 {
     private const string Group = "fixed-jobs";
 
+    private const string FollowUpGroup = "follow-ups";
+
     private static JobKey KeyFor(Guid jobId) => new($"job-{jobId}", Group);
+    private static JobKey FollowUpKeyFor(Guid jobId) => new($"followup-{jobId}", FollowUpGroup);
 
     public async Task ScheduleFixedAsync(Guid jobId, DateTime runAtUtc, CancellationToken ct)
     {
@@ -59,9 +84,28 @@ public class QuartzJobScheduler(ISchedulerFactory factory, TimeProvider clock) :
         await scheduler.ScheduleJob(job, trigger.WithSimpleSchedule(s => s.WithMisfireHandlingInstructionFireNow()).Build(), ct);
     }
 
+    public async Task ScheduleFollowUpAsync(Guid jobId, DateTime dueUtc, CancellationToken ct)
+    {
+        var scheduler = await factory.GetScheduler(ct);
+        var key = FollowUpKeyFor(jobId);
+        if (await scheduler.CheckExists(key, ct)) await scheduler.DeleteJob(key, ct);
+
+        var job = JobBuilder.Create<FollowUpJob>()
+            .WithIdentity(key)
+            .UsingJobData(FollowUpJob.JobIdKey, jobId.ToString())
+            .Build();
+
+        var trigger = TriggerBuilder.Create().WithIdentity($"followup-trigger-{jobId}", FollowUpGroup).ForJob(key);
+        var due = new DateTimeOffset(DateTime.SpecifyKind(dueUtc, DateTimeKind.Utc));
+        if (due <= clock.GetUtcNow()) trigger.StartNow(); else trigger.StartAt(due);
+
+        await scheduler.ScheduleJob(job, trigger.WithSimpleSchedule(s => s.WithMisfireHandlingInstructionFireNow()).Build(), ct);
+    }
+
     public async Task UnscheduleAsync(Guid jobId, CancellationToken ct)
     {
         var scheduler = await factory.GetScheduler(ct);
         await scheduler.DeleteJob(KeyFor(jobId), ct);
+        await scheduler.DeleteJob(FollowUpKeyFor(jobId), ct);
     }
 }

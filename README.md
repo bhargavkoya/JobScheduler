@@ -64,6 +64,14 @@ dotnet user-secrets set "Email:Password" "<16-char app password>" --project src/
 - Each email has an idempotency key and is recorded in `SentEmails`, so a retried run does not send twice. Terminal job failures email the job owner once per failed attempt.
 - Calculation rules are data (`/admin/rules`, admin only). A job lists rule names in its `rules` field, comma-separated, for example `Total Position, Exposure Cap, Variance vs Ledger`. Seeded rule types: `SumAmount`, `Threshold`, `Variance`.
 
+## Manual actions and approvals
+
+- A template with `RequiresApproval` (seeded: "Capital Allocation Approval") runs its pipeline, emails the approver, then parks the job in **Needs manual action**. The approver is the `approverEmail` field and must be a registered user with the `jobs.approve` claim (or an Admin).
+- Only that approver (or an admin) can approve or reject, once. Reject needs a comment and fails the job, so the normal Retry re-submits it. Decisions are kept as an audit trail on the job.
+- Set `followUpAfterMinutes` on the job to send the approver one reminder email if nothing has happened by then. It is rebuilt from the database after a restart.
+- The **Manual actions** tab (and `GET /jobs/manual-queue`) lists everything waiting on a human.
+- A job is flagged **at risk** when a Fixed time passed without it starting, or when it has been running / waiting on an approval for longer than `AtRisk:ThresholdMinutes` (default 15). It is computed on read, not stored.
+
 ## Commands
 
 - `docker compose up -d` — start Postgres

@@ -12,17 +12,21 @@ public class User
     public List<UserClaim> Claims { get; set; } = new();
     public List<UserTeamAccess> ObserverTeams { get; set; } = new();
 
+    // Diff rather than clear-and-add: re-adding a row with the same composite key
+    // in one SaveChanges would collide with the tracked row being removed.
     public void SetPermissions(IEnumerable<string> permissions)
     {
-        Claims.Clear();
-        foreach (var permission in permissions.Distinct(StringComparer.Ordinal))
+        var wanted = permissions.ToHashSet(StringComparer.Ordinal);
+        Claims.RemoveAll(c => !wanted.Contains(c.Permission));
+        foreach (var permission in wanted.Where(p => Claims.All(c => c.Permission != p)))
             Claims.Add(new UserClaim { UserId = Id, Permission = permission });
     }
 
     public void SetObserverTeams(IEnumerable<Team> teams)
     {
-        ObserverTeams.Clear();
-        foreach (var team in teams.Distinct().Where(t => t != PrimaryTeam))
+        var wanted = teams.Where(t => t != PrimaryTeam).ToHashSet();
+        ObserverTeams.RemoveAll(t => !wanted.Contains(t.Team));
+        foreach (var team in wanted.Where(t => ObserverTeams.All(o => o.Team != t)))
             ObserverTeams.Add(new UserTeamAccess { UserId = Id, Team = team });
     }
 }

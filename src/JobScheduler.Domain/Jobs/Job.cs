@@ -20,6 +20,13 @@ public class Job
     public Guid OwnerId { get; set; }
     public Team Team { get; set; }
     public JobStatus Status { get; set; } = JobStatus.Scheduled;
+
+    /// <summary>The single approver, resolved at creation for templates that require approval.</summary>
+    public Guid? ApproverUserId { get; set; }
+
+    /// <summary>When <see cref="Status"/> last changed. Drives at-risk flagging (stuck running / waiting too long).</summary>
+    public DateTime StatusChangedAtUtc { get; set; } = DateTime.UtcNow;
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     /// <summary>Jobs that haven't started or are waiting on a human can still be cancelled.</summary>
@@ -30,27 +37,56 @@ public class Job
     {
         if (Status is not (JobStatus.Scheduled or JobStatus.Failed))
             throw new InvalidJobStateException($"A job in status '{Status}' cannot be started.");
-        Status = JobStatus.InProgress;
+        SetStatus(JobStatus.InProgress);
     }
 
     public void MarkCompleted()
     {
         if (Status != JobStatus.InProgress)
             throw new InvalidJobStateException($"A job in status '{Status}' cannot be completed.");
-        Status = JobStatus.Completed;
+        SetStatus(JobStatus.Completed);
     }
 
     public void MarkFailed()
     {
         if (Status != JobStatus.InProgress)
             throw new InvalidJobStateException($"A job in status '{Status}' cannot be failed.");
-        Status = JobStatus.Failed;
+        SetStatus(JobStatus.Failed);
     }
 
     public void Cancel()
     {
         if (!CanCancel)
             throw new InvalidJobStateException($"A job in status '{Status}' cannot be cancelled.");
-        Status = JobStatus.Cancelled;
+        SetStatus(JobStatus.Cancelled);
+    }
+
+    /// <summary>The pipeline finished and a human must decide (single approver).</summary>
+    public void RequestApproval()
+    {
+        if (Status != JobStatus.InProgress)
+            throw new InvalidJobStateException($"A job in status '{Status}' cannot ask for approval.");
+        SetStatus(JobStatus.NeedsManualAction);
+    }
+
+    public void Approve()
+    {
+        if (Status != JobStatus.NeedsManualAction)
+            throw new InvalidJobStateException($"A job in status '{Status}' is not waiting for approval.");
+        SetStatus(JobStatus.Completed);
+    }
+
+    /// <summary>A rejected job is Failed, so the normal retry path can re-submit it.</summary>
+    public void Reject()
+    {
+        if (Status != JobStatus.NeedsManualAction)
+            throw new InvalidJobStateException($"A job in status '{Status}' is not waiting for approval.");
+        SetStatus(JobStatus.Failed);
+    }
+
+    private void SetStatus(JobStatus status)
+    {
+        Status = status;
+        StatusChangedAtUtc = DateTime.UtcNow;
     }
 }

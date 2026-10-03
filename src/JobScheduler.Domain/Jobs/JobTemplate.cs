@@ -30,5 +30,8 @@ public class JobTemplate
     /// <summary>Only approved templates can be used to create jobs. Admins approve the catalog.</summary>
     public bool IsApproved { get; set; }
 
+    /// <summary>When set, a successful run ends in NeedsManualAction and waits for the single approver.</summary>
+    public bool RequiresApproval { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

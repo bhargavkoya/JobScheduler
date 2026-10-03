@@ -1,6 +1,7 @@
 using JobScheduler.Application.Auth;
 using JobScheduler.Application.Common;
 using JobScheduler.Application.Jobs;
+using JobScheduler.Application.Runs;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Users;
 using Moq;
@@ -15,6 +16,7 @@ public class JobServiceTests
     private readonly Mock<ITemplateStore> _templates = new();
     private readonly Mock<ICurrentUser> _me = new();
     private readonly Mock<TimeProvider> _clock = new();
+    private readonly Mock<IJobScheduler> _scheduler = new();
     private readonly Guid _myId = Guid.NewGuid();
 
     private readonly JobTemplate _template = new()
@@ -42,7 +44,7 @@ public class JobServiceTests
         _templates.Setup(t => t.FindAsync(_template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_template);
     }
 
-    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object);
+    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object);
 
     private static Dictionary<string, string> GoodConfig() => new() { ["report"] = "Positions", ["email"] = "a@b.com" };
 
@@ -84,6 +86,23 @@ public class JobServiceTests
 
         Assert.Equal(new DateTime(2026, 10, 6, 4, 0, 0), saved!.RunAtUtc); // 09:30 IST = 04:00 UTC
         Assert.Equal(new DateTime(2026, 10, 6, 9, 30, 0), dto.RunAtIst);
+    }
+
+    [Fact]
+    public async Task Create_Fixed_RegistersTriggerWithScheduler()
+    {
+        await Sut().CreateAsync(Request(ScheduleType.Fixed, new DateTime(2026, 10, 6, 9, 30, 0)), default);
+
+        _scheduler.Verify(s => s.ScheduleFixedAsync(
+            It.IsAny<Guid>(), new DateTime(2026, 10, 6, 4, 0, 0), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Create_Manual_DoesNotTouchScheduler()
+    {
+        await Sut().CreateAsync(Request(), default);
+
+        _scheduler.Verify(s => s.ScheduleFixedAsync(It.IsAny<Guid>(), It.IsAny<DateTime>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -237,6 +256,7 @@ public class JobServiceTests
 
         Assert.Equal(JobStatus.Cancelled, dto.Status);
         _jobs.Verify(j => j.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _scheduler.Verify(s => s.UnscheduleAsync(job.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

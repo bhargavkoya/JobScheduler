@@ -18,6 +18,61 @@ export interface AuthResult {
   user: UserProfile
 }
 
+export type ScheduleType = 'Fixed' | 'Recurrent' | 'EventBased' | 'TriggerBased' | 'Manual'
+export type JobStatus = 'Scheduled' | 'InProgress' | 'Completed' | 'Cancelled' | 'Failed' | 'NeedsManualAction'
+export type FieldType = 'String' | 'Text' | 'Number' | 'Email'
+
+export interface TemplateField {
+  name: string
+  label: string
+  type: FieldType
+  required: boolean
+}
+
+export interface RetryPolicy {
+  maxAutoRetries: number
+  backoffSeconds: number
+}
+
+export interface Template {
+  id: string
+  name: string
+  description: string
+  supportedScheduleTypes: ScheduleType[]
+  fields: TemplateField[]
+  defaultRetryPolicy: RetryPolicy
+  isApproved: boolean
+}
+
+export interface Job {
+  id: string
+  templateId: string
+  templateName: string
+  name: string
+  scheduleType: ScheduleType
+  runAtUtc: string | null
+  runAtIst: string | null
+  status: JobStatus
+  team: Team
+  ownerId: string
+  retryPolicy: RetryPolicy
+  config: Record<string, string>
+  createdAtUtc: string
+  canCancel: boolean
+}
+
+export interface CreateJobPayload {
+  templateId: string
+  name: string
+  scheduleType: ScheduleType
+  runAtIst?: string
+  config: Record<string, string>
+  retryPolicy?: RetryPolicy
+}
+
+/** Only these can be created so far; the rest arrive in later phases. */
+export const CREATABLE_SCHEDULE_TYPES: ScheduleType[] = ['Fixed', 'Manual']
+
 export class ApiError extends Error {
   status: number
 

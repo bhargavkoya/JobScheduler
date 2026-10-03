@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { API_BASE_URL } from './api'
 import { useAuth } from './auth/AuthContext'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { CatalogPage } from './jobs/CatalogPage'
+import { JobsPage } from './jobs/JobsPage'
 
 type HealthState =
   | { status: 'loading' }
@@ -48,6 +50,7 @@ function Health() {
 
 function Home() {
   const { user, logout } = useAuth()
+  const [tab, setTab] = useState<'jobs' | 'catalog' | 'access'>('jobs')
   if (!user) return null
 
   return (
@@ -64,21 +67,46 @@ function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-4 p-6">
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-2 font-medium text-slate-800">Your access</h2>
-          <dl className="grid grid-cols-[8rem_1fr] gap-y-1 text-sm text-slate-600">
-            <dt>Role</dt>
-            <dd>{user.role}</dd>
-            <dt>Primary team</dt>
-            <dd>{user.primaryTeam}</dd>
-            <dt>Observer teams</dt>
-            <dd>{user.observerTeams.length ? user.observerTeams.join(', ') : 'none'}</dd>
-            <dt>Claims</dt>
-            <dd>{user.permissions.length ? user.permissions.join(', ') : 'none'}</dd>
-          </dl>
-        </section>
-        <Health />
+      <nav className="flex gap-1 border-b border-slate-200 bg-white px-6">
+        {([
+          ['jobs', 'Jobs'],
+          ['catalog', 'Catalog'],
+          ['access', 'My access'],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={
+              'border-b-2 px-3 py-2 text-sm ' +
+              (tab === key ? 'border-indigo-600 font-medium text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800')
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <main className="mx-auto max-w-4xl space-y-4 p-6">
+        {tab === 'jobs' && <JobsPage />}
+        {tab === 'catalog' && <CatalogPage />}
+        {tab === 'access' && (
+          <>
+            <section className="rounded-lg border border-slate-200 bg-white p-4">
+              <h2 className="mb-2 font-medium text-slate-800">Your access</h2>
+              <dl className="grid grid-cols-[8rem_1fr] gap-y-1 text-sm text-slate-600">
+                <dt>Role</dt>
+                <dd>{user.role}</dd>
+                <dt>Primary team</dt>
+                <dd>{user.primaryTeam}</dd>
+                <dt>Observer teams</dt>
+                <dd>{user.observerTeams.length ? user.observerTeams.join(', ') : 'none'}</dd>
+                <dt>Claims</dt>
+                <dd>{user.permissions.length ? user.permissions.join(', ') : 'none'}</dd>
+              </dl>
+            </section>
+            <Health />
+          </>
+        )}
       </main>
     </div>
   )

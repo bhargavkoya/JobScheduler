@@ -1,3 +1,4 @@
+using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,8 @@ public class JobSchedulerDbContext : DbContext
 
     public DbSet<SystemInfo> SystemInfo => Set<SystemInfo>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<JobTemplate> JobTemplates => Set<JobTemplate>();
+    public DbSet<Job> Jobs => Set<Job>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -32,6 +35,32 @@ public class JobSchedulerDbContext : DbContext
             b.Property(u => u.PrimaryTeam).HasConversion<string>().HasMaxLength(32);
             b.HasMany(u => u.Claims).WithOne().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
             b.HasMany(u => u.ObserverTeams).WithOne().HasForeignKey(t => t.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<JobTemplate>(b =>
+        {
+            b.HasKey(t => t.Id);
+            b.Property(t => t.Name).HasMaxLength(200).IsRequired();
+            b.HasIndex(t => t.Name).IsUnique();
+            b.Property(t => t.Description).HasMaxLength(2000);
+            b.PrimitiveCollection(t => t.SupportedScheduleTypes);
+            b.OwnsMany(t => t.Fields, o => o.ToJson());
+            b.OwnsOne(t => t.DefaultRetryPolicy);
+        });
+
+        modelBuilder.Entity<Job>(b =>
+        {
+            b.HasKey(j => j.Id);
+            b.Property(j => j.Name).HasMaxLength(200).IsRequired();
+            b.Property(j => j.ScheduleType).HasConversion<string>().HasMaxLength(32);
+            b.Property(j => j.Status).HasConversion<string>().HasMaxLength(32);
+            b.Property(j => j.Team).HasConversion<string>().HasMaxLength(32);
+            b.Property(j => j.ConfigJson).HasColumnType("jsonb");
+            b.OwnsOne(j => j.RetryPolicy);
+            b.HasOne(j => j.Template).WithMany().HasForeignKey(j => j.TemplateId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne<User>().WithMany().HasForeignKey(j => j.OwnerId).OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(j => j.Status);
+            b.HasIndex(j => new { j.Team, j.CreatedAtUtc });
         });
 
         modelBuilder.Entity<UserClaim>(b =>

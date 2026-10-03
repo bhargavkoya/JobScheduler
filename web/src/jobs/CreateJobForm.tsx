@@ -17,6 +17,8 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   const [name, setName] = useState('')
   const [runAtIst, setRunAtIst] = useState('')
   const [config, setConfig] = useState<Record<string, string>>({})
+  const [retries, setRetries] = useState('')
+  const [backoff, setBackoff] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -54,6 +56,14 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
         name,
         scheduleType,
         config,
+        ...(retries !== '' || backoff !== ''
+          ? {
+              retryPolicy: {
+                maxAutoRetries: Number(retries === '' ? template?.defaultRetryPolicy.maxAutoRetries : retries),
+                backoffSeconds: Number(backoff === '' ? template?.defaultRetryPolicy.backoffSeconds : backoff),
+              },
+            }
+          : {}),
         ...(scheduleType === 'Fixed' ? { runAtIst: runAtIst.length === 16 ? `${runAtIst}:00` : runAtIst } : {}),
       }
       await apiFetch<Job>('/jobs', { method: 'POST', body: JSON.stringify(payload) }, token)
@@ -135,6 +145,17 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
           )}
         </label>
       ))}
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-sm text-slate-600">
+          Auto retries (blank = template default{template ? `: ${template.defaultRetryPolicy.maxAutoRetries}` : ''})
+          <input type="number" min={0} max={10} value={retries} onChange={(e) => setRetries(e.target.value)} className={input} />
+        </label>
+        <label className="block text-sm text-slate-600">
+          Backoff seconds (blank = default{template ? `: ${template.defaultRetryPolicy.backoffSeconds}` : ''})
+          <input type="number" min={0} max={3600} value={backoff} onChange={(e) => setBackoff(e.target.value)} className={input} />
+        </label>
+      </div>
 
       {error && <p role="alert" className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 

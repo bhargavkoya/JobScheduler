@@ -1,11 +1,20 @@
+using System.Security.Cryptography;
+using System.Text;
+using JobScheduler.Api;
+using JobScheduler.Infrastructure.Auth;
 using JobScheduler.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -16,6 +25,39 @@ var connectionString = builder.Configuration.GetConnectionString("JobSchedulerDb
 
 builder.Services.AddDbContext<JobSchedulerDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+builder.Services.AddAuthInfrastructure();
+
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+if (jwtOptions.Key.Length < 32)
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException(
+            "Jwt:Key must be at least 32 characters. Set it via user-secrets or the Jwt__Key environment variable.");
+
+    // Dev convenience: ephemeral key so a fresh clone runs without secrets (tokens die on restart).
+    jwtOptions.Key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+}
+builder.Services.AddSingleton(Options.Create(jwtOptions));
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false; // keep "sub", "role", "perm" as issued
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key)),
+            RoleClaimType = AppClaimTypes.Role,
+            NameClaimType = "sub",
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+
+builder.Services.AddAuthorization(options => options.AddAppPolicies());
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<JobSchedulerDbContext>();
@@ -31,6 +73,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<JobSchedulerDbContext>();
+    await db.Database.MigrateAsync();
+    await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -42,6 +92,9 @@ app.UseHttpsRedirection();
 
 app.UseCors(WebClientCorsPolicy);
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

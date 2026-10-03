@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: job-scheduler-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobscheduler
+      POSTGRES_PASSWORD: jobscheduler_dev_pw
+      POSTGRES_DB: jobscheduler
+    ports:
+      - "5433:5432"
+    volumes:
+      - job-scheduler-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  job-scheduler-postgres-data:

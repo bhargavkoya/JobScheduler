@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node / frontend
+web/node_modules/
+web/dist/
+web/.env.local
+web/.env.*.local
+
+# Secrets / environment
+*.env
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db

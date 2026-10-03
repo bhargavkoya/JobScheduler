@@ -11,6 +11,7 @@ public static class Ist
     public static DateTime ToUtc(DateTime istLocal) =>
         new DateTimeOffset(DateTime.SpecifyKind(istLocal, DateTimeKind.Unspecified), Offset).UtcDateTime;
 
+    /// <summary>Returns an IST wall-clock time with Kind=Unspecified, so it serializes without a "Z".</summary>
     public static DateTime FromUtc(DateTime utc) =>
-        DateTime.SpecifyKind(utc, DateTimeKind.Utc).Add(Offset);
+        DateTime.SpecifyKind(utc.Add(Offset), DateTimeKind.Unspecified);
 }

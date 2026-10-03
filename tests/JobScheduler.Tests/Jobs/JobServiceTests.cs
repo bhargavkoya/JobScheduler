@@ -17,6 +17,7 @@ public class JobServiceTests
     private readonly Mock<ICurrentUser> _me = new();
     private readonly Mock<TimeProvider> _clock = new();
     private readonly Mock<IJobScheduler> _scheduler = new();
+    private readonly Mock<IUserStore> _users = new();
     private readonly Guid _myId = Guid.NewGuid();
 
     private readonly JobTemplate _template = new()
@@ -44,7 +45,7 @@ public class JobServiceTests
         _templates.Setup(t => t.FindAsync(_template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_template);
     }
 
-    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object);
+    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object, _users.Object, AtRiskPolicy.Default);
 
     private static Dictionary<string, string> GoodConfig() => new() { ["report"] = "Positions", ["email"] = "a@b.com" };
 
@@ -52,6 +53,79 @@ public class JobServiceTests
         ScheduleType type = ScheduleType.Manual, DateTime? runAtIst = null,
         Dictionary<string, string>? config = null, RetryPolicyDto? retry = null) =>
         new(_template.Id, " My job ", type, runAtIst, config ?? GoodConfig(), retry);
+
+    // ---- approver resolution ----
+
+    private void RequireApproval()
+    {
+        _template.RequiresApproval = true;
+        _template.Fields = [.. _template.Fields, new TemplateField { Name = "approverEmail", Label = "Approver", Type = FieldType.Email, Required = true }];
+    }
+
+    private Dictionary<string, string> ApprovalConfig(string email = "appr@x.com")
+    {
+        var config = GoodConfig();
+        config["approverEmail"] = email;
+        return config;
+    }
+
+    [Fact]
+    public async Task Create_ApprovalTemplate_StoresTheResolvedApprover()
+    {
+        RequireApproval();
+        var approver = new User { Email = "appr@x.com" };
+        approver.SetPermissions([Permissions.ApproveJobs]);
+        _users.Setup(u => u.FindByEmailAsync("appr@x.com", It.IsAny<CancellationToken>())).ReturnsAsync(approver);
+        Job? saved = null;
+        _jobs.Setup(j => j.AddAsync(It.IsAny<Job>(), It.IsAny<CancellationToken>()))
+            .Callback<Job, CancellationToken>((j, _) => saved = j).Returns(Task.CompletedTask);
+
+        var dto = await Sut().CreateAsync(Request(config: ApprovalConfig(" Appr@X.com ")), default);
+
+        Assert.Equal(approver.Id, saved!.ApproverUserId);
+        Assert.Equal(approver.Id, dto.ApproverUserId);
+        Assert.True(dto.RequiresApproval);
+    }
+
+    [Fact]
+    public async Task Create_ApprovalTemplate_UnknownApprover_IsRejected()
+    {
+        RequireApproval();
+
+        await Assert.ThrowsAsync<ValidationException>(() => Sut().CreateAsync(Request(config: ApprovalConfig()), default));
+        _jobs.Verify(j => j.AddAsync(It.IsAny<Job>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ApprovalTemplate_ApproverWithoutPermission_IsRejected()
+    {
+        RequireApproval();
+        _users.Setup(u => u.FindByEmailAsync("appr@x.com", It.IsAny<CancellationToken>())).ReturnsAsync(new User { Email = "appr@x.com" });
+
+        await Assert.ThrowsAsync<ValidationException>(() => Sut().CreateAsync(Request(config: ApprovalConfig()), default));
+    }
+
+    [Fact]
+    public async Task Create_ApprovalTemplate_AdminApprover_IsAllowedWithoutTheClaim()
+    {
+        RequireApproval();
+        _users.Setup(u => u.FindByEmailAsync("appr@x.com", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User { Email = "appr@x.com", Role = Role.Admin });
+
+        var dto = await Sut().CreateAsync(Request(config: ApprovalConfig()), default);
+
+        Assert.NotNull(dto.ApproverUserId);
+    }
+
+    [Fact]
+    public async Task Create_PlainTemplate_HasNoApprover_AndNeverLooksOneUp()
+    {
+        var dto = await Sut().CreateAsync(Request(), default);
+
+        Assert.Null(dto.ApproverUserId);
+        Assert.False(dto.RequiresApproval);
+        _users.VerifyNoOtherCalls();
+    }
 
     // ---- create ----
 

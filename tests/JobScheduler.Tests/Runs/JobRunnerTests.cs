@@ -1,3 +1,4 @@
+using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Jobs;
 using JobScheduler.Application.Runs;
 using JobScheduler.Domain.Jobs;
@@ -30,6 +31,7 @@ public class JobRunnerTests
     private readonly Mock<IJobStore> _jobs = new();
     private readonly Mock<IJobQueue> _queue = new();
     private readonly Mock<IFailureNotifier> _notifier = new();
+    private readonly Mock<IApprovalFollowUp> _followUp = new();
     private readonly Mock<TimeProvider> _clock = new();
 
     private readonly Job _job = new()
@@ -55,7 +57,7 @@ public class JobRunnerTests
 
     // Steps passed out of order on purpose: the runner must order them by pipeline position.
     private JobRunner Sut() => new(
-        _runs.Object, _jobs.Object, [_email, _calculate, _download], _queue.Object, _notifier.Object, _clock.Object,
+        _runs.Object, _jobs.Object, [_email, _calculate, _download], _queue.Object, _notifier.Object, _followUp.Object, _clock.Object,
         NullLogger<JobRunner>.Instance);
 
     private static FakeStep Failing(PipelineStep step, int failFirstCalls) => new(step, (_, call) =>
@@ -68,7 +70,7 @@ public class JobRunnerTests
         var download = new FakeStep(PipelineStep.DownloadReport, (_, _) => { order.Add(PipelineStep.DownloadReport); return "d"; });
         _calculate = new FakeStep(PipelineStep.Calculate, (_, _) => { order.Add(PipelineStep.Calculate); return "c"; });
         var email = new FakeStep(PipelineStep.SendEmail, (_, _) => { order.Add(PipelineStep.SendEmail); return "e"; });
-        var sut = new JobRunner(_runs.Object, _jobs.Object, [email, _calculate, download], _queue.Object, _notifier.Object, _clock.Object,
+        var sut = new JobRunner(_runs.Object, _jobs.Object, [email, _calculate, download], _queue.Object, _notifier.Object, _followUp.Object, _clock.Object,
             NullLogger<JobRunner>.Instance);
 
         await sut.ExecuteAsync(_run.Id, default);
@@ -83,11 +85,59 @@ public class JobRunnerTests
     }
 
     [Fact]
+    public async Task ApprovalTemplate_Success_WaitsForApproval_AndSchedulesTheFollowUp()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = true };
+
+        await Sut().ExecuteAsync(_run.Id, default);
+
+        Assert.Equal(RunStatus.Succeeded, _run.Status);                // the pipeline itself finished
+        Assert.Equal(JobStatus.NeedsManualAction, _job.Status);        // but a human must decide
+        _followUp.Verify(f => f.ScheduleAsync(_job, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PlainTemplate_Success_CompletesWithoutFollowUp()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = false };
+
+        await Sut().ExecuteAsync(_run.Id, default);
+
+        Assert.Equal(JobStatus.Completed, _job.Status);
+        _followUp.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task FollowUpSchedulingFailure_DoesNotBreakTheRun()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = true };
+        _followUp.Setup(f => f.ScheduleAsync(It.IsAny<Job>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("scheduler down"));
+
+        await Sut().ExecuteAsync(_run.Id, default); // must not throw
+
+        Assert.Equal(JobStatus.NeedsManualAction, _job.Status);
+    }
+
+    [Fact]
+    public async Task ApprovalTemplate_StepFailure_StillFailsNormally_NoApprovalRequested()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = true };
+        _job.RetryPolicy = new RetryPolicy { MaxAutoRetries = 0, BackoffSeconds = 0 };
+        _calculate = Failing(PipelineStep.Calculate, failFirstCalls: 1);
+
+        await Sut().ExecuteAsync(_run.Id, default);
+
+        Assert.Equal(JobStatus.Failed, _job.Status);
+        _followUp.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task LaterSteps_ReceiveEarlierStepOutput()
     {
         var download = new FakeStep(PipelineStep.DownloadReport, (_, _) => "report-json");
         _calculate = new FakeStep(PipelineStep.Calculate);
-        var sut = new JobRunner(_runs.Object, _jobs.Object, [download, _calculate, _email], _queue.Object, _notifier.Object, _clock.Object,
+        var sut = new JobRunner(_runs.Object, _jobs.Object, [download, _calculate, _email], _queue.Object, _notifier.Object, _followUp.Object, _clock.Object,
             NullLogger<JobRunner>.Instance);
 
         await sut.ExecuteAsync(_run.Id, default);

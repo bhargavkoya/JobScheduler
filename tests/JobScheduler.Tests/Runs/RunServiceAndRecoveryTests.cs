@@ -1,4 +1,5 @@
 using System.Text.Json;
+using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Auth;
 using JobScheduler.Application.Common;
 using JobScheduler.Application.Jobs;
@@ -139,8 +140,27 @@ public class StartupRecoveryTests
     private readonly Mock<IJobRunStore> _runs = new();
     private readonly Mock<IJobScheduler> _scheduler = new();
     private readonly Mock<IJobQueue> _queue = new();
+    private readonly Mock<IApprovalFollowUp> _followUp = new();
 
-    private StartupRecovery Sut() => new(_jobs.Object, _runs.Object, _scheduler.Object, _queue.Object);
+    public StartupRecoveryTests()
+    {
+        _jobs.Setup(j => j.ListNeedingManualActionAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+    }
+
+    [Fact]
+    public async Task Recover_RebuildsFollowUpTriggers_ForJobsWaitingOnApproval()
+    {
+        var waiting = new Job { Status = JobStatus.NeedsManualAction };
+        _jobs.Setup(j => j.ListScheduledFixedAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        _jobs.Setup(j => j.ListNeedingManualActionAsync(It.IsAny<CancellationToken>())).ReturnsAsync([waiting]);
+        _runs.Setup(r => r.ListUnfinishedAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+
+        await Sut().RecoverAsync(default);
+
+        _followUp.Verify(f => f.ScheduleAsync(waiting, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private StartupRecovery Sut() => new(_jobs.Object, _runs.Object, _scheduler.Object, _queue.Object, _followUp.Object);
 
     [Fact]
     public async Task Recover_ReschedulesScheduledFixedJobs_AndRequeuesUnfinishedRuns()
@@ -208,6 +228,21 @@ public class PipelineStepTests
             It.Is<EmailMessage>(m => m.To == "b@x.com" && m.IdempotencyKey == "run-key:email" && m.Body.Contains("all good")),
             It.IsAny<CancellationToken>()), Times.Once);
         Assert.Contains("b@x.com", output);
+    }
+
+    [Fact]
+    public async Task SendEmail_ApprovalJob_IsTheApprovalRequest_WithTheSameIdempotencyKey()
+    {
+        var sender = new Mock<IEmailSender>();
+        var job = JobWith("""{"first":"approver@x.com"}""");
+        job.Template!.RequiresApproval = true;
+
+        await new SendEmailStep(sender.Object).ExecuteAsync(Context(job), default);
+
+        sender.Verify(s => s.SendAsync(
+            It.Is<EmailMessage>(m => m.To == "approver@x.com" && m.Subject.Contains("Approval needed")
+                                     && m.IdempotencyKey == "run-key:email"),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using JobScheduler.Application.Auth;
+using JobScheduler.Application.Common;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JobScheduler.Api;
@@ -13,12 +14,14 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
             await next(context);
         }
         catch (Exception ex) when (ex is ValidationException or DuplicateEmailException
-                                       or InvalidCredentialsException or UserNotFoundException)
+                                       or InvalidCredentialsException or UserNotFoundException
+                                       or NotFoundException or ForbiddenException or ConflictException)
         {
             var status = ex switch
             {
                 ValidationException => StatusCodes.Status400BadRequest,
-                DuplicateEmailException => StatusCodes.Status409Conflict,
+                DuplicateEmailException or ConflictException => StatusCodes.Status409Conflict,
+                ForbiddenException => StatusCodes.Status403Forbidden,
                 InvalidCredentialsException => StatusCodes.Status401Unauthorized,
                 _ => StatusCodes.Status404NotFound
             };

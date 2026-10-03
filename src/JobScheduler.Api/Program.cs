@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using JobScheduler.Api;
 using JobScheduler.Infrastructure.Auth;
+using JobScheduler.Infrastructure.Jobs;
 using JobScheduler.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -79,6 +80,7 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<JobSchedulerDbContext>();
     await db.Database.MigrateAsync();
     await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);
+    await scope.ServiceProvider.GetRequiredService<TemplateSeeder>().SeedAsync(CancellationToken.None);
 }
 
 // Configure the HTTP request pipeline.

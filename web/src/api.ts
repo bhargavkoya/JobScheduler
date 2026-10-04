@@ -65,6 +65,8 @@ export interface Job {
   statusChangedAtUtc: string
   isAtRisk: boolean
   atRiskReason: string | null
+  recurrenceText: string | null
+  triggerJobId: string | null
 }
 
 export interface ManualActionItem {
@@ -118,10 +120,23 @@ export interface CreateJobPayload {
   runAtIst?: string
   config: Record<string, string>
   retryPolicy?: RetryPolicy
+  recurrence?: Recurrence
+  triggerJobId?: string
 }
 
+export type RecurrenceFrequency = 'Daily' | 'Weekly' | 'Monthly'
+
+export interface Recurrence {
+  frequency: RecurrenceFrequency
+  time: string
+  dayOfWeek: number | null
+  dayOfMonth: number | null
+}
+
+export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
 /** Only these can be created so far; the rest arrive in later phases. */
-export const CREATABLE_SCHEDULE_TYPES: ScheduleType[] = ['Fixed', 'Manual']
+export const CREATABLE_SCHEDULE_TYPES: ScheduleType[] = ['Fixed', 'Manual', 'Recurrent', 'EventBased']
 
 export class ApiError extends Error {
   status: number
@@ -137,6 +152,18 @@ export function formatInstantIst(utc: string | null): string {
   if (!utc) return '—'
   const value = /[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST'
+}
+
+/** Downloads an authenticated CSV (a plain link cannot send the bearer token). */
+export async function downloadCsv(path: string, filename: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) throw new ApiError(res.status, `Export failed (HTTP ${res.status})`)
+  const url = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {

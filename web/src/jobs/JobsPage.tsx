@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiFetch, type Job, type JobStatus, type ScheduleType, type Team } from '../api'
+import { apiFetch, downloadCsv, type Job, type JobStatus, type ScheduleType, type Team } from '../api'
 import { useAuth } from '../auth/AuthContext'
 import { CreateJobForm } from './CreateJobForm'
 import { ApprovalHistory } from './ApprovalHistory'
@@ -206,7 +206,7 @@ export function JobsPage() {
                 <td className="px-3 py-2 font-medium text-slate-800">{j.name}</td>
                 <td className="px-3 py-2">{j.templateName}</td>
                 <td className="px-3 py-2">{j.scheduleType === 'Manual' ? 'Manual kickoff' : j.scheduleType}</td>
-                <td className="px-3 py-2">{formatIst(j.runAtIst)}</td>
+                <td className="px-3 py-2">{j.recurrenceText ?? (j.scheduleType === 'EventBased' ? 'After another job' : formatIst(j.runAtIst))}</td>
                 <td className="px-3 py-2">{j.team}</td>
                 <td className="px-3 py-2">
                   <StatusBadge status={j.status} />
@@ -241,6 +241,17 @@ export function JobsPage() {
                   Retry
                 </button>
               )}
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void downloadCsv(`/jobs/${selected.id}/runs/export`, `${selected.name}-runs.csv`, token).catch((e: unknown) =>
+                    setError(e instanceof Error ? e.message : 'Export failed'),
+                  )
+                }
+                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Export CSV
+              </button>
               {selected.canCancel && (
                 <button
                   disabled={busy}

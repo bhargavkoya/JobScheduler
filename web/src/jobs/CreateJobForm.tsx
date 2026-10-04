@@ -4,6 +4,8 @@ import {
   CREATABLE_SCHEDULE_TYPES,
   type CreateJobPayload,
   type Job,
+  type Recurrence,
+  WEEKDAYS,
   type ScheduleType,
   type Template,
 } from '../api'
@@ -19,6 +21,9 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   const [config, setConfig] = useState<Record<string, string>>({})
   const [retries, setRetries] = useState('')
   const [backoff, setBackoff] = useState('')
+  const [recurrence, setRecurrence] = useState<Recurrence>({ frequency: 'Daily', time: '09:00', dayOfWeek: 1, dayOfMonth: 1 })
+  const [candidates, setCandidates] = useState<Job[]>([])
+  const [triggerJobId, setTriggerJobId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -35,6 +40,15 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  useEffect(() => {
+    if (scheduleType !== 'EventBased') return
+    const controller = new AbortController()
+    apiFetch<Job[]>('/jobs', { signal: controller.signal }, token)
+      .then((list) => setCandidates(list.filter((j) => !['Cancelled', 'Failed'].includes(j.status) && (j.status !== 'Completed' || j.scheduleType === 'Recurrent'))))
+      .catch(() => setCandidates([]))
+    return () => controller.abort()
+  }, [scheduleType, token])
 
   const template = templates.find((t) => t.id === templateId)
   const allowedTypes = template?.supportedScheduleTypes.filter((s) => CREATABLE_SCHEDULE_TYPES.includes(s)) ?? []
@@ -64,6 +78,16 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
               },
             }
           : {}),
+        ...(scheduleType === 'Recurrent'
+          ? {
+              recurrence: {
+                ...recurrence,
+                dayOfWeek: recurrence.frequency === 'Weekly' ? recurrence.dayOfWeek : null,
+                dayOfMonth: recurrence.frequency === 'Monthly' ? recurrence.dayOfMonth : null,
+              },
+            }
+          : {}),
+        ...(scheduleType === 'EventBased' ? { triggerJobId } : {}),
         ...(scheduleType === 'Fixed' ? { runAtIst: runAtIst.length === 16 ? `${runAtIst}:00` : runAtIst } : {}),
       }
       await apiFetch<Job>('/jobs', { method: 'POST', body: JSON.stringify(payload) }, token)
@@ -119,6 +143,55 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
         <label className="block text-sm text-slate-600">
           Run at (IST)
           <input type="datetime-local" required value={runAtIst} onChange={(e) => setRunAtIst(e.target.value)} className={input} />
+        </label>
+      )}
+
+      {scheduleType === 'Recurrent' && (
+        <div className="grid grid-cols-3 gap-3">
+          <label className="block text-sm text-slate-600">
+            Repeats
+            <select
+              value={recurrence.frequency}
+              onChange={(e) => setRecurrence({ ...recurrence, frequency: e.target.value as Recurrence['frequency'] })}
+              className={input}
+            >
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+          </label>
+          {recurrence.frequency === 'Weekly' && (
+            <label className="block text-sm text-slate-600">
+              Day
+              <select value={recurrence.dayOfWeek ?? 1} onChange={(e) => setRecurrence({ ...recurrence, dayOfWeek: Number(e.target.value) })} className={input}>
+                {WEEKDAYS.map((d, i) => (
+                  <option key={d} value={i}>{d}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {recurrence.frequency === 'Monthly' && (
+            <label className="block text-sm text-slate-600">
+              Day of month (1-28)
+              <input type="number" min={1} max={28} value={recurrence.dayOfMonth ?? 1} onChange={(e) => setRecurrence({ ...recurrence, dayOfMonth: Number(e.target.value) })} className={input} />
+            </label>
+          )}
+          <label className="block text-sm text-slate-600">
+            Time (IST)
+            <input type="time" required value={recurrence.time} onChange={(e) => setRecurrence({ ...recurrence, time: e.target.value })} className={input} />
+          </label>
+        </div>
+      )}
+
+      {scheduleType === 'EventBased' && (
+        <label className="block text-sm text-slate-600">
+          Start when this job completes
+          <select required value={triggerJobId} onChange={(e) => setTriggerJobId(e.target.value)} className={input}>
+            <option value="">Select a job…</option>
+            {candidates.map((j) => (
+              <option key={j.id} value={j.id}>{j.name}</option>
+            ))}
+          </select>
         </label>
       )}
 

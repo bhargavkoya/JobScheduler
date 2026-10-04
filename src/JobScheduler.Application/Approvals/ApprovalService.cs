@@ -39,6 +39,7 @@ public class ApprovalService(
     IApprovalStore approvals,
     IUserStore users,
     IJobScheduler scheduler,
+    IJobChainer chainer,
     ICurrentUser me,
     TimeProvider clock,
     AtRiskPolicy atRisk) : IApprovalService
@@ -114,6 +115,8 @@ public class ApprovalService(
         await approvals.SaveChangesAsync(ct);
         await jobs.SaveChangesAsync(ct);
         await scheduler.UnscheduleAsync(job.Id, ct); // the follow-up chaser is no longer needed
+        if (decision == ApprovalDecision.Approved && run is not null)
+            await chainer.OnJobCompletedAsync(job.Id, run.Id, ct);
         return job.ToDto(Now(), atRisk);
     }
 

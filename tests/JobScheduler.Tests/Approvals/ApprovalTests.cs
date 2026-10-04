@@ -80,6 +80,7 @@ public class ApprovalServiceTests
     private readonly Mock<IApprovalStore> _approvals = new();
     private readonly Mock<IUserStore> _users = new();
     private readonly Mock<IJobScheduler> _scheduler = new();
+    private readonly Mock<IJobChainer> _chainer = new();
     private readonly Mock<ICurrentUser> _me = new();
     private readonly Mock<TimeProvider> _clock = new();
 
@@ -117,7 +118,7 @@ public class ApprovalServiceTests
     }
 
     private ApprovalService Sut() => new(
-        _jobs.Object, _runs.Object, _approvals.Object, _users.Object, _scheduler.Object, _me.Object,
+        _jobs.Object, _runs.Object, _approvals.Object, _users.Object, _scheduler.Object, _chainer.Object, _me.Object,
         _clock.Object, AtRiskPolicy.Default);
 
     [Fact]

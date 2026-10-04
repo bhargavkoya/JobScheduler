@@ -40,5 +40,7 @@ internal static class Mapping
         j.ApproverUserId,
         j.StatusChangedAtUtc,
         atRiskReason is not null,
-        atRiskReason);
+        atRiskReason,
+        j.RecurrenceText,
+        j.TriggerJobId);
 }

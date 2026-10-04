@@ -8,7 +8,11 @@ namespace JobScheduler.Application.Runs;
 /// <summary>System-level triggering (no HTTP user): used by the scheduler and by the user-facing service.</summary>
 public interface IRunOrchestrator
 {
-    Task<JobRun> EnqueueScheduledAsync(Guid jobId, CancellationToken ct);
+    /// <summary>Fixed or Recurrent firing. <paramref name="fireTimeUtc"/> is the trigger's scheduled time (idempotency per firing).</summary>
+    Task<JobRun> EnqueueScheduledAsync(Guid jobId, DateTime? fireTimeUtc, CancellationToken ct);
+
+    /// <summary>EventBased: the upstream job's run completed. One run per upstream run, however often this is called.</summary>
+    Task<JobRun> EnqueueChainedAsync(Guid jobId, Guid upstreamRunId, CancellationToken ct);
     Task<JobRun> EnqueueManualAsync(Guid jobId, string? clientKey, Guid triggeredByUserId, CancellationToken ct);
     Task<JobRun> RetryAsync(Guid jobId, Guid triggeredByUserId, CancellationToken ct);
 }
@@ -17,14 +21,29 @@ public class RunOrchestrator(IJobStore jobs, IJobRunStore runs, IJobQueue queue,
 {
     private const int MaxClientKeyLength = 100;
 
-    public async Task<JobRun> EnqueueScheduledAsync(Guid jobId, CancellationToken ct)
+    public async Task<JobRun> EnqueueScheduledAsync(Guid jobId, DateTime? fireTimeUtc, CancellationToken ct)
     {
         var job = await LoadAsync(jobId, ct);
-        if (job.ScheduleType != ScheduleType.Fixed || job.RunAtUtc is null)
-            throw new Auth.ValidationException("Only Fixed jobs with a run time are fired by the scheduler.");
+        switch (job.ScheduleType)
+        {
+            case ScheduleType.Fixed when job.RunAtUtc is not null:
+                // One key per scheduled time: a duplicate fire (restart, misfire) maps to the same run.
+                return await EnqueueAsync(job, $"{job.Id}:fixed:{job.RunAtUtc:O}", null, ct);
+            case ScheduleType.Recurrent:
+                // One key per firing, so a double-fire of the same cron tick never creates a second run.
+                var fired = fireTimeUtc ?? clock.GetUtcNow().UtcDateTime;
+                return await EnqueueAsync(job, $"{job.Id}:recurrent:{fired:O}", null, ct);
+            default:
+                throw new Auth.ValidationException("Only Fixed or Recurrent jobs are fired by the scheduler.");
+        }
+    }
 
-        // One key per scheduled time: a duplicate fire (restart, misfire) maps to the same run.
-        return await EnqueueAsync(job, $"{job.Id}:fixed:{job.RunAtUtc:O}", null, ct);
+    public async Task<JobRun> EnqueueChainedAsync(Guid jobId, Guid upstreamRunId, CancellationToken ct)
+    {
+        var job = await LoadAsync(jobId, ct);
+        if (job.ScheduleType != ScheduleType.EventBased)
+            throw new Auth.ValidationException("Only EventBased jobs are triggered by another job.");
+        return await EnqueueAsync(job, $"{job.Id}:chain:{upstreamRunId}", null, ct);
     }
 
     public async Task<JobRun> EnqueueManualAsync(Guid jobId, string? clientKey, Guid triggeredByUserId, CancellationToken ct)
@@ -66,8 +85,8 @@ public class RunOrchestrator(IJobStore jobs, IJobRunStore runs, IJobQueue queue,
         var existing = await runs.FindByKeyAsync(key, ct);
         if (existing is not null) return existing;
 
-        if (job.Status != JobStatus.Scheduled)
-            throw new ConflictException($"Job is {job.Status}; only Scheduled jobs can be run.");
+        if (!job.CanStartRun)
+            throw new ConflictException($"Job is {job.Status}; only jobs that are ready (Scheduled) can be run.");
 
         var run = new JobRun
         {

@@ -23,7 +23,8 @@ public class JobService(
 {
     /// <summary>Schedule types that can actually be created in this phase.</summary>
     public static readonly IReadOnlySet<ScheduleType> CreatableScheduleTypes =
-        new HashSet<ScheduleType> { ScheduleType.Fixed, ScheduleType.Manual };
+        new HashSet<ScheduleType>
+        { ScheduleType.Fixed, ScheduleType.Manual, ScheduleType.Recurrent, ScheduleType.EventBased };
 
     public async Task<JobDto> CreateAsync(CreateJobRequest request, CancellationToken ct)
     {
@@ -51,8 +52,20 @@ public class JobService(
         }
         else if (request.RunAtIst is not null)
         {
-            throw new ValidationException("Manual kickoff jobs must not have a run time.");
+            throw new ValidationException($"{request.ScheduleType} jobs must not have a run time.");
         }
+
+        RecurrenceSchedule? recurrence = null;
+        if (request.ScheduleType == ScheduleType.Recurrent)
+            recurrence = RecurrenceBuilder.Build(request.Recurrence);
+        else if (request.Recurrence is not null)
+            throw new ValidationException("Only Recurrent jobs take a recurrence.");
+
+        Guid? triggerJobId = null;
+        if (request.ScheduleType == ScheduleType.EventBased)
+            triggerJobId = (await ResolveTriggerJobAsync(request.TriggerJobId, ct)).Id;
+        else if (request.TriggerJobId is not null)
+            throw new ValidationException("Only EventBased jobs take a trigger job.");
 
         var config = ValidateConfig(template, request.Config);
         var approverId = await ResolveApproverAsync(template, config, ct);
@@ -67,6 +80,9 @@ public class JobService(
             Name = request.Name.Trim(),
             ScheduleType = request.ScheduleType,
             RunAtUtc = runAtUtc,
+            RecurrenceCron = recurrence?.Cron,
+            RecurrenceText = recurrence?.Text,
+            TriggerJobId = triggerJobId,
             ConfigJson = JsonSerializer.Serialize(config),
             RetryPolicy = new RetryPolicy { MaxAutoRetries = retry.MaxAutoRetries, BackoffSeconds = retry.BackoffSeconds },
             OwnerId = me.UserId,
@@ -82,6 +98,8 @@ public class JobService(
 
         if (job.ScheduleType == ScheduleType.Fixed)
             await scheduler.ScheduleFixedAsync(job.Id, job.RunAtUtc!.Value, ct);
+        else if (job.ScheduleType == ScheduleType.Recurrent)
+            await scheduler.ScheduleRecurrentAsync(job.Id, job.RecurrenceCron!, ct);
         return job.ToDto(Now(), atRisk);
     }
 
@@ -113,6 +131,18 @@ public class JobService(
         await jobs.SaveChangesAsync(ct);
         await scheduler.UnscheduleAsync(job.Id, ct);
         return job.ToDto(Now(), atRisk);
+    }
+
+    /// <summary>The upstream job must exist, be visible to the creator and still be able to complete.</summary>
+    private async Task<Job> ResolveTriggerJobAsync(Guid? triggerJobId, CancellationToken ct)
+    {
+        if (triggerJobId is null)
+            throw new ValidationException("Event-based jobs require the job whose completion triggers them.");
+        var upstream = await JobAccess.LoadVisibleAsync(jobs, me, triggerJobId.Value, ct);
+        if (upstream.Status is JobStatus.Cancelled or JobStatus.Completed or JobStatus.Failed
+            && upstream.ScheduleType != ScheduleType.Recurrent)
+            throw new ValidationException($"The trigger job is {upstream.Status} and can no longer complete.");
+        return upstream;
     }
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;

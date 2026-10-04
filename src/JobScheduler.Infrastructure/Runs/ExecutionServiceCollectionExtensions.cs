@@ -18,6 +18,7 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IJobRunStore, EfJobRunStore>();
         services.AddScoped<IRunOrchestrator, RunOrchestrator>();
         services.AddScoped<IJobRunService, JobRunService>();
+        services.AddScoped<IJobChainer, JobChainer>();
         services.AddScoped<JobRunner>();
         services.AddScoped<StartupRecovery>();
 
@@ -39,6 +40,7 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IRuleService, RuleService>();
         services.AddScoped<ICalculationEngine, RulesCalculationEngine>();
         services.AddScoped<RuleSeeder>();
+        services.AddScoped<JobScheduler.Infrastructure.Jobs.DemoJobSeeder>();
 
         var email = config.GetSection(EmailOptions.SectionName).Get<EmailOptions>() ?? new EmailOptions();
         services.Configure<EmailOptions>(config.GetSection(EmailOptions.SectionName));

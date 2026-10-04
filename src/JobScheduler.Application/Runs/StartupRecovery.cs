@@ -19,6 +19,10 @@ public class StartupRecovery(
         foreach (var job in scheduled)
             await scheduler.ScheduleFixedAsync(job.Id, job.RunAtUtc!.Value, ct);
 
+        var recurrent = await jobs.ListActiveRecurrentAsync(ct);
+        foreach (var job in recurrent)
+            await scheduler.ScheduleRecurrentAsync(job.Id, job.RecurrenceCron!, ct);
+
         // Jobs still waiting on an approver get their chaser trigger back (late ones fire immediately, once).
         foreach (var job in await jobs.ListNeedingManualActionAsync(ct))
             await followUp.ScheduleAsync(job, ct);
@@ -27,6 +31,6 @@ public class StartupRecovery(
         foreach (var run in unfinished)
             await queue.EnqueueAsync(run.Id, null, ct);
 
-        return new RecoveryResult(scheduled.Count, unfinished.Count);
+        return new RecoveryResult(scheduled.Count + recurrent.Count, unfinished.Count);
     }
 }

@@ -48,6 +48,10 @@ public class JobsController(IJobService jobs, IJobRunService runs) : ControllerB
     public async Task<ActionResult<JobRunDto>> Retry(Guid id, CancellationToken ct) =>
         Accepted(await runs.RetryAsync(id, ct));
 
+    [HttpGet("{id:guid}/runs/export")]
+    public async Task<FileContentResult> ExportRuns(Guid id, CancellationToken ct) =>
+        File(System.Text.Encoding.UTF8.GetBytes(await runs.ExportRunsCsvAsync(id, ct)), "text/csv", $"job-{id}-runs.csv");
+
     [HttpGet("{id:guid}/runs")]
     public async Task<ActionResult<IReadOnlyList<JobRunDto>>> Runs(Guid id, CancellationToken ct) =>
         Ok(await runs.ListRunsAsync(id, ct));

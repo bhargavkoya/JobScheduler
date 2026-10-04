@@ -1,6 +1,7 @@
 using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Common;
 using JobScheduler.Application.Runs;
+using JobScheduler.Domain.Jobs;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -21,7 +22,8 @@ public class FireJobRunJob(IServiceScopeFactory scopes, ILogger<FireJobRunJob> l
 
         try
         {
-            var run = await orchestrator.EnqueueScheduledAsync(jobId, context.CancellationToken);
+            var run = await orchestrator.EnqueueScheduledAsync(
+                jobId, context.ScheduledFireTimeUtc?.UtcDateTime, context.CancellationToken);
             log.LogInformation("Scheduler fired job {JobId}: run {RunId} ({Status}).", jobId, run.Id, run.Status);
         }
         catch (Exception ex) when (ex is ConflictException or NotFoundException)
@@ -83,6 +85,29 @@ public class QuartzJobScheduler(ISchedulerFactory factory, TimeProvider clock) :
 
         await scheduler.ScheduleJob(job, trigger.WithSimpleSchedule(s => s.WithMisfireHandlingInstructionFireNow()).Build(), ct);
     }
+
+    public async Task ScheduleRecurrentAsync(Guid jobId, string cron, CancellationToken ct)
+    {
+        var scheduler = await factory.GetScheduler(ct);
+        var key = KeyFor(jobId);
+        if (await scheduler.CheckExists(key, ct)) await scheduler.DeleteJob(key, ct);
+
+        var job = JobBuilder.Create<FireJobRunJob>()
+            .WithIdentity(key)
+            .UsingJobData(FireJobRunJob.JobIdKey, jobId.ToString())
+            .Build();
+
+        // Single timezone (IST). A missed firing runs once on recovery rather than being replayed N times.
+        var trigger = TriggerBuilder.Create()
+            .WithIdentity($"trigger-{jobId}", Group)
+            .ForJob(key)
+            .WithCronSchedule(cron, c => c.InTimeZone(IstZone).WithMisfireHandlingInstructionFireAndProceed())
+            .Build();
+        await scheduler.ScheduleJob(job, trigger, ct);
+    }
+
+    private static readonly TimeZoneInfo IstZone =
+        TimeZoneInfo.CreateCustomTimeZone("IST", Ist.Offset, "India Standard Time", "IST");
 
     public async Task ScheduleFollowUpAsync(Guid jobId, DateTime dueUtc, CancellationToken ct)
     {

@@ -30,6 +30,17 @@ public class EfJobStore(JobSchedulerDbContext db) : IJobStore
             .Where(j => j.Status == JobStatus.Scheduled && j.ScheduleType == ScheduleType.Fixed && j.RunAtUtc != null)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Job>> ListActiveRecurrentAsync(CancellationToken ct) =>
+        await db.Jobs.AsNoTracking()
+            .Where(j => j.ScheduleType == ScheduleType.Recurrent && j.Status != JobStatus.Cancelled && j.RecurrenceCron != null)
+            .ToListAsync(ct);
+
+    public async Task<IReadOnlyList<Job>> ListWaitingDependentsAsync(Guid triggerJobId, CancellationToken ct) =>
+        await db.Jobs.Include(j => j.Template)
+            .Where(j => j.ScheduleType == ScheduleType.EventBased && j.TriggerJobId == triggerJobId
+                        && j.Status == JobStatus.Scheduled)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Job>> ListNeedingManualActionAsync(CancellationToken ct) =>
         await db.Jobs.AsNoTracking().Include(j => j.Template)
             .Where(j => j.Status == JobStatus.NeedsManualAction)

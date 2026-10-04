@@ -31,7 +31,11 @@ public sealed record CreateJobRequest(
     /// <summary>Fixed jobs only: local IST date/time (no offset).</summary>
     DateTime? RunAtIst,
     IReadOnlyDictionary<string, string>? Config,
-    RetryPolicyDto? RetryPolicy);
+    RetryPolicyDto? RetryPolicy,
+    /// <summary>Recurrent jobs only.</summary>
+    RecurrenceDto? Recurrence = null,
+    /// <summary>EventBased jobs only: the job whose completion triggers this one.</summary>
+    Guid? TriggerJobId = null);
 
 public sealed record JobFilter(
     JobStatus? Status,
@@ -60,4 +64,6 @@ public sealed record JobDto(
     Guid? ApproverUserId,
     DateTime StatusChangedAtUtc,
     bool IsAtRisk,
-    string? AtRiskReason);
+    string? AtRiskReason,
+    string? RecurrenceText = null,
+    Guid? TriggerJobId = null);

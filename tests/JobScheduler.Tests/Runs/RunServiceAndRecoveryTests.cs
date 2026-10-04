@@ -145,6 +145,21 @@ public class StartupRecoveryTests
     public StartupRecoveryTests()
     {
         _jobs.Setup(j => j.ListNeedingManualActionAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        _jobs.Setup(j => j.ListActiveRecurrentAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+    }
+
+    [Fact]
+    public async Task Recover_ReregistersCronTriggers_ForRecurrentJobs()
+    {
+        var daily = new Job { ScheduleType = ScheduleType.Recurrent, RecurrenceCron = "0 0 9 * * ?" };
+        _jobs.Setup(j => j.ListScheduledFixedAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+        _jobs.Setup(j => j.ListActiveRecurrentAsync(It.IsAny<CancellationToken>())).ReturnsAsync([daily]);
+        _runs.Setup(r => r.ListUnfinishedAsync(It.IsAny<CancellationToken>())).ReturnsAsync([]);
+
+        var result = await Sut().RecoverAsync(default);
+
+        Assert.Equal(1, result.JobsRescheduled);
+        _scheduler.Verify(s => s.ScheduleRecurrentAsync(daily.Id, "0 0 9 * * ?", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

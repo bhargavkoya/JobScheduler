@@ -27,6 +27,10 @@ public interface IJobStore
     Task<IReadOnlyList<Job>> ListAsync(JobQuery query, CancellationToken ct);
     /// <summary>Scheduled Fixed jobs with a run time (used to rebuild triggers on startup).</summary>
     Task<IReadOnlyList<Job>> ListScheduledFixedAsync(CancellationToken ct);
+    /// <summary>Recurrent jobs that still repeat (not cancelled), used to rebuild cron triggers on startup.</summary>
+    Task<IReadOnlyList<Job>> ListActiveRecurrentAsync(CancellationToken ct);
+    /// <summary>Scheduled EventBased jobs waiting on the given upstream job.</summary>
+    Task<IReadOnlyList<Job>> ListWaitingDependentsAsync(Guid triggerJobId, CancellationToken ct);
     /// <summary>Jobs waiting on a human, across all teams (used to rebuild follow-up triggers on startup).</summary>
     Task<IReadOnlyList<Job>> ListNeedingManualActionAsync(CancellationToken ct);
     Task AddAsync(Job job, CancellationToken ct);

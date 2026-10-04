@@ -29,6 +29,7 @@ public interface IJobRunService
     Task<JobRunDto> RunNowAsync(Guid jobId, string? idempotencyKey, CancellationToken ct);
     Task<JobRunDto> RetryAsync(Guid jobId, CancellationToken ct);
     Task<IReadOnlyList<JobRunDto>> ListRunsAsync(Guid jobId, CancellationToken ct);
+    Task<string> ExportRunsCsvAsync(Guid jobId, CancellationToken ct);
 }
 
 /// <summary>User-facing run operations: visibility and permission checks, then delegate to the orchestrator.</summary>
@@ -59,6 +60,9 @@ public class JobRunService(IJobStore jobs, IJobRunStore runs, IRunOrchestrator o
         await JobAccess.LoadVisibleAsync(jobs, me, jobId, ct);
         return (await runs.ListForJobAsync(jobId, ct)).Select(ToDto).ToList();
     }
+
+    public async Task<string> ExportRunsCsvAsync(Guid jobId, CancellationToken ct) =>
+        RunHistoryCsv.Build(await ListRunsAsync(jobId, ct));
 
     internal static JobRunDto ToDto(JobRun r) => new(
         r.Id,

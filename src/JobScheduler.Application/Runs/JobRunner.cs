@@ -17,6 +17,7 @@ public class JobRunner(
     IJobQueue queue,
     IFailureNotifier failureNotifier,
     IApprovalFollowUp followUp,
+    IJobChainer chainer,
     TimeProvider clock,
     ILogger<JobRunner> log)
 {
@@ -97,6 +98,19 @@ public class JobRunner(
         await SaveAsync(ct);
 
         if (needsApproval) await ScheduleFollowUpAsync(job, ct);
+        else await ChainAsync(job, run, ct);
+    }
+
+    private async Task ChainAsync(Domain.Jobs.Job job, JobRun run, CancellationToken ct)
+    {
+        try
+        {
+            await chainer.OnJobCompletedAsync(job.Id, run.Id, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Job {JobId}: could not start chained jobs.", job.Id);
+        }
     }
 
     private async Task ScheduleFollowUpAsync(Domain.Jobs.Job job, CancellationToken ct)

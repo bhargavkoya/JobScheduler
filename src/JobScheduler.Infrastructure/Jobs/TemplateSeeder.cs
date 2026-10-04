@@ -13,7 +13,7 @@ public class TemplateSeeder(JobSchedulerDbContext db)
         {
             Name = "Daily Reconciliation Report",
             Description = "Download the daily position report, run reconciliation rules and email the result.",
-            SupportedScheduleTypes = [ScheduleType.Fixed, ScheduleType.Manual],
+            SupportedScheduleTypes = [ScheduleType.Fixed, ScheduleType.Manual, ScheduleType.Recurrent],
             Fields =
             [
                 Field("reportName", "Report name", FieldType.String, true),
@@ -46,7 +46,7 @@ public class TemplateSeeder(JobSchedulerDbContext db)
         {
             Name = "Follow-up Chaser",
             Description = "Email a team member who owes an action, optionally re-chasing after a delay.",
-            SupportedScheduleTypes = [ScheduleType.Fixed, ScheduleType.Manual],
+            SupportedScheduleTypes = [ScheduleType.Fixed, ScheduleType.Manual, ScheduleType.EventBased],
             Fields =
             [
                 Field("assigneeEmail", "Assignee email", FieldType.Email, true),
@@ -78,6 +78,10 @@ public class TemplateSeeder(JobSchedulerDbContext db)
             await db.SaveChangesAsync(ct);
         }
 
+        // Phase 6 added Recurrent / EventBased support to two catalog templates.
+        await EnsureScheduleTypeAsync("Daily Reconciliation Report", ScheduleType.Recurrent, ct);
+        await EnsureScheduleTypeAsync("Follow-up Chaser", ScheduleType.EventBased, ct);
+
         // Same for the approval template: it gained RequiresApproval and the follow-up field in Phase 5.
         var approval = await db.JobTemplates.FirstAsync(t => t.Name == "Capital Allocation Approval", ct);
         if (!approval.RequiresApproval || approval.Fields.All(f => f.Name != FollowUpField.Name))
@@ -87,6 +91,14 @@ public class TemplateSeeder(JobSchedulerDbContext db)
                 approval.Fields = [.. approval.Fields, FollowUpField];
             await db.SaveChangesAsync(ct);
         }
+    }
+
+    private async Task EnsureScheduleTypeAsync(string templateName, ScheduleType type, CancellationToken ct)
+    {
+        var template = await db.JobTemplates.FirstAsync(t => t.Name == templateName, ct);
+        if (template.SupportedScheduleTypes.Contains(type)) return;
+        template.SupportedScheduleTypes = [.. template.SupportedScheduleTypes, type];
+        await db.SaveChangesAsync(ct);
     }
 
     private static TemplateField FollowUpField =>

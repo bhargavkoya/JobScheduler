@@ -15,6 +15,15 @@ public class Job
     /// <summary>For Fixed jobs: the one-off run time, stored in UTC (entered in IST).</summary>
     public DateTime? RunAtUtc { get; set; }
 
+    /// <summary>For Recurrent jobs: Quartz cron expression, evaluated in IST.</summary>
+    public string? RecurrenceCron { get; set; }
+
+    /// <summary>For Recurrent jobs: human-readable form, e.g. "Daily at 09:00 IST".</summary>
+    public string? RecurrenceText { get; set; }
+
+    /// <summary>For EventBased jobs: the job whose completion triggers this one.</summary>
+    public Guid? TriggerJobId { get; set; }
+
     public string ConfigJson { get; set; } = "{}";
     public RetryPolicy RetryPolicy { get; set; } = new();
     public Guid OwnerId { get; set; }
@@ -30,12 +39,17 @@ public class Job
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     /// <summary>Jobs that haven't started or are waiting on a human can still be cancelled.</summary>
-    public bool CanCancel => Status is JobStatus.Scheduled or JobStatus.NeedsManualAction;
+    public bool CanCancel => Status is JobStatus.Scheduled or JobStatus.NeedsManualAction
+        || (ScheduleType == ScheduleType.Recurrent && Status is JobStatus.Completed or JobStatus.Failed);
+
+    /// <summary>Whether a new run may start now. A recurrent job is ready again once its previous run completed.</summary>
+    public bool CanStartRun => Status == JobStatus.Scheduled
+        || (ScheduleType == ScheduleType.Recurrent && Status == JobStatus.Completed);
 
     /// <summary>Queued or retrying. Allowed from Scheduled (first run) or Failed (manual retry).</summary>
     public void MarkInProgress()
     {
-        if (Status is not (JobStatus.Scheduled or JobStatus.Failed))
+        if (Status is not (JobStatus.Scheduled or JobStatus.Failed) && !CanStartRun)
             throw new InvalidJobStateException($"A job in status '{Status}' cannot be started.");
         SetStatus(JobStatus.InProgress);
     }

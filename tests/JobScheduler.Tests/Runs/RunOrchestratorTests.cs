@@ -134,7 +134,7 @@ public class RunOrchestratorTests
     {
         MakeFixed();
 
-        var run = await Sut().EnqueueScheduledAsync(_job.Id, default);
+        var run = await Sut().EnqueueScheduledAsync(_job.Id, null, default);
 
         Assert.Equal($"{_job.Id}:fixed:{_job.RunAtUtc:O}", run.IdempotencyKey);
         Assert.Null(run.TriggeredByUserId);
@@ -149,7 +149,7 @@ public class RunOrchestratorTests
         var existing = new JobRun { JobId = _job.Id, IdempotencyKey = $"{_job.Id}:fixed:{_job.RunAtUtc:O}" };
         _runs.Setup(r => r.FindByKeyAsync(existing.IdempotencyKey, It.IsAny<CancellationToken>())).ReturnsAsync(existing);
 
-        var run = await Sut().EnqueueScheduledAsync(_job.Id, default);
+        var run = await Sut().EnqueueScheduledAsync(_job.Id, null, default);
 
         Assert.Same(existing, run);
         _queue.Verify(q => q.EnqueueAsync(It.IsAny<Guid>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -161,12 +161,12 @@ public class RunOrchestratorTests
         MakeFixed();
         _job.Status = JobStatus.Cancelled;
 
-        await Assert.ThrowsAsync<ConflictException>(() => Sut().EnqueueScheduledAsync(_job.Id, default));
+        await Assert.ThrowsAsync<ConflictException>(() => Sut().EnqueueScheduledAsync(_job.Id, null, default));
     }
 
     [Fact]
     public async Task Scheduled_NonFixedJob_Throws() =>
-        await Assert.ThrowsAsync<ValidationException>(() => Sut().EnqueueScheduledAsync(_job.Id, default));
+        await Assert.ThrowsAsync<ValidationException>(() => Sut().EnqueueScheduledAsync(_job.Id, null, default));
 
     // ---- retry ----
 

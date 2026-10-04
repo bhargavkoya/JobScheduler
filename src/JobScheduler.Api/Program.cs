@@ -87,6 +87,7 @@ if (app.Environment.IsDevelopment())
     await scope.ServiceProvider.GetRequiredService<DemoDataSeeder>().SeedAsync(CancellationToken.None);
     await scope.ServiceProvider.GetRequiredService<TemplateSeeder>().SeedAsync(CancellationToken.None);
     await scope.ServiceProvider.GetRequiredService<RuleSeeder>().SeedAsync(CancellationToken.None);
+    await scope.ServiceProvider.GetRequiredService<DemoJobSeeder>().SeedAsync(CancellationToken.None);
 }
 
 // Configure the HTTP request pipeline.

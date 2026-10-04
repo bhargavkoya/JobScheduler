@@ -7,6 +7,7 @@ This is a base-level interview POC, not a production system.
 ## Project docs
 
 - [`docs/PRD.md`](docs/PRD.md) — product requirements
+- [`docs/DEMO.md`](docs/DEMO.md) — 5-minute demo script
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current-state architecture, updated every phase
 - [`docs/PLAN.md`](docs/PLAN.md) — phased build checklist, updated every phase
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisions log, appended every phase
@@ -71,6 +72,12 @@ dotnet user-secrets set "Email:Password" "<16-char app password>" --project src/
 - Set `followUpAfterMinutes` on the job to send the approver one reminder email if nothing has happened by then. It is rebuilt from the database after a restart.
 - The **Manual actions** tab (and `GET /jobs/manual-queue`) lists everything waiting on a human.
 - A job is flagged **at risk** when a Fixed time passed without it starting, or when it has been running / waiting on an approval for longer than `AtRisk:ThresholdMinutes` (default 15). It is computed on read, not stored.
+
+## Recurrent and chained jobs, export
+
+- **Recurrent**: Daily / Weekly / Monthly at an IST time (monthly day capped at 28). Stored as a Quartz cron, evaluated in IST, rebuilt from the database on restart. Each firing is one run, keyed by the tick time, so a double fire cannot create two runs. A firing is skipped while the previous run is still going, waiting on approval, or Failed (retry it first). Cancel stops the recurrence.
+- **Event-based**: pick an upstream job; when its run completes (including after approval) the dependent starts, once per upstream run. TriggerBased (webhooks) is still not supported.
+- `GET /jobs/{id}/runs/export` (or the Export CSV button) returns the run history as CSV, times in IST.
 
 ## Commands
 

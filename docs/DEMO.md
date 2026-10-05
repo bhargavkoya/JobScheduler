@@ -27,4 +27,9 @@ Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd 
 
 ## 5. Export
 
-- Open any job -> **Export CSV** downloads its run history (IST times, formula-safe cells).
+- Open any job -> **Export CSV** downloads its run history (IST times, formula-safe cells); **Export PDF** gives a printable report with a job header.
+
+## 6. Webhook trigger and notification preferences (optional, about 1 min)
+
+- New job -> template **Daily Reconciliation Report** -> **Trigger-based (webhook)**. Copy the token shown once, then run the `curl` it prints. Run it again with the same `Idempotency-Key`: one run only. Talking point: only a hash of the token is stored; a wrong token is a 401 that looks the same as an unknown job.
+- **Notifications** tab: switch off "Job completed", save, run a job and show the log line "notifications are switched off" instead of an email.

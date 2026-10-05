@@ -24,3 +24,17 @@ ADR-style log of non-obvious choices made during the build, beyond what's alread
 | 11 | DbContext seed in Phase 0 | A trivial, non-domain `SystemInfo` marker table/row — added only to prove the EF Core migration pipeline works before any real domain entities exist (Phase 1). Will be deleted once real entities land. |
 | 12 | Frontend location | Kept nested at `job-scheduler/web/` inside this one repo (not split into a sibling folder or a separate git repository) — confirmed with the user during Phase 0. |
 | 13 | Tailwind version | Tailwind CSS v4 via the `@tailwindcss/vite` plugin (no separate PostCSS/tailwind.config.js needed) rather than v3's config-file setup. |
+
+## Phase 7
+
+Items 6, 7 and 8 above (PDF, notification preferences, webhook auth) were built here, outside the PRD section 7 MVP slice, at the owner's request.
+
+| # | Question | Decision |
+|---|---|---|
+| 14 | Webhook credential | Random 256-bit token per job, shown once, stored as a SHA-256 hash and compared in constant time (a leaked database does not leak usable tokens). Unknown job, wrong job type and wrong token all return the same 401 so job ids cannot be probed. |
+| 15 | Webhook idempotency | Only an explicit `Idempotency-Key` header deduplicates. Hashing the body was rejected: an external system legitimately sends identical payloads repeatedly (for example an empty "report ready" ping) and those must each start a run. |
+| 16 | Trigger-based job lifecycle | Behaves like Recurrent: ready again after a completed run. A Failed trigger job needs a manual Retry first, so a flood of webhooks cannot pile runs on a broken job. |
+| 17 | Notification preference enforcement | One decorator around `IEmailSender` keyed off an optional event tag on `EmailMessage`, instead of a check at every call site. Missing preference rows mean enabled, so existing behaviour is unchanged. Per-event only (no per-job or per-team overrides). |
+| 18 | Owner completion email | Added so `JobCompleted` has something to mute. Skipped when the job's result email already goes to the owner, to avoid two emails for one completion. |
+| 19 | PDF library | QuestPDF under its Community license (free for non-commercial and small-business use, not MIT) rather than a hand-rolled PDF writer; fine for a POC, revisit the license before any commercial use. |
+| 20 | Gmail verification | An admin-only `POST /admin/email/test` that mails only the calling admin's own address and bypasses the sent-email record, so it is repeatable and cannot be used to mail anyone else. |

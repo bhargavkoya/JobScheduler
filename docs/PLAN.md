@@ -1,21 +1,27 @@
 # Build Plan
 
-Phased build order from the approved implementation plan (2026-10-03). Each phase is independently demoable. Marked done with a one-line note on what shipped and any deviation from the original plan. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for current-state design and [`DECISIONS.md`](DECISIONS.md) for the reasoning behind specific choices.
+What was built, phase by phase. Each phase was a branch and a PR to `main`, and is independently demoable. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the current-state design and [`DECISIONS.md`](DECISIONS.md) for the reasoning behind specific choices. The phase numbering follows what actually shipped; it replaces the original ten-phase outline from Phase 0.
 
 | Phase | Scope | Demo criterion | Status |
 |---|---|---|---|
-| 0 | Solution/projects, docker-compose Postgres, EF Core + initial migration, health endpoint, Swagger, Vite+TS+Tailwind placeholder hitting `/health`, `.gitignore`, README, living docs, first commit | `dotnet build` + `npm run dev` both work; placeholder page shows health status | **Done** — see note below |
-| 1 | Domain entities, DbContext, migrations, seed data (users, teams, 2 templates) | Migrations apply; seeded data visible via a basic read endpoint | Not started |
-| 2 | Auth: register/login, JWT, role/team/claims, policies | curl/Postman login → JWT → call a protected endpoint | Not started |
-| 3 | Job template + Job CRUD (Fixed + Manual only, no execution) | Create a Fixed and a Manual job via API; see both in dashboard list | Not started |
-| 4 | Quartz + `IJobQueue` + worker skeleton, stub (no-op) pipeline | Schedule a Fixed job 1 min out; watch it auto-transition to Completed | Not started |
-| 5 | Real step handlers: Download (finance stub), Calculate (rule engine), Email (Gmail/MailKit) | Manual-kickoff job runs full pipeline; real email arrives | Not started |
-| 6 | Failure + retry path, idempotency verification | Inject a failure → auto-retry per policy → manual Retry → confirm no double email | Not started |
-| 7 | Manual action / approval workflow, manual-action queue view | Approval-required job reaches `NeedsManualAction`; single approver resolves it | Not started |
-| 8 | Event-based chaining + follow-up chaser | Job completion fires dependent job; unresolved approval fires a chaser on a demo-shortened timer | Not started |
-| 9 | Frontend buildout (trails 3-8 or runs alongside) | Dashboard, job detail, manual-action queue, creation forms usable end-to-end | Not started |
-| 10 *(stretch)* | Recurrent type, trigger-based webhook, CSV export, notification-preference enforcement | Only if time allows — not required for PRD §7's bar | Not started |
+| 0 | Solution and projects, docker-compose Postgres, EF Core, health endpoint, Swagger, Vite + TS + Tailwind placeholder | `dotnet build` and `npm run dev` work; placeholder page shows API health | **Done** |
+| 1 | Auth (email + password, JWT), roles, Business/Technical teams, claims and policies, web login | Log in, receive a JWT, call a protected endpoint; claims gate fine-grained actions | **Done** (PR #1) |
+| 2 | Job templates (admin-approved catalog) and jobs (create, list, cancel), seeded demo data, web catalog and create form | Create a Fixed and a Manual job from a template and see them in the dashboard | **Done** (PR #2) |
+| 3 | Execution engine: Quartz (in-memory) + `StartupRecovery`, Channels queue and worker, `JobRun` / `JobRunStep`, idempotency keys, auto-retry with exponential backoff, manual retry, finance REST mock | A job runs download -> calculate -> email through the queue; a failure retries and a manual Retry resumes without double effects | **Done** (PR #3) |
+| 4 | Rules-based calculation engine (rules stored as data, admin rules API) and real Gmail via MailKit with idempotent sending and owner failure emails | Rules change a calculation outcome without a code change; a retried run does not send twice | **Done** (PR #4); live Gmail send needs your app password (see README) |
+| 5 | Single-approver manual-action workflow, manual queue, at-risk flag, follow-up chaser, dashboard summary and filters | An approval job parks in Needs manual action; the named approver decides once | **Done** (PR #5) |
+| 6 | Recurrent schedules (IST cron), event-chained jobs, CSV export of run history, demo seed chain, `DEMO.md` | Completing one job starts its dependent; a daily job fires by itself | **Done** (PR #6) |
+| 7 | Trigger-based (webhook) jobs, per-user notification preferences with an owner completion email, PDF export, Gmail test endpoint, docs refresh | `curl` a webhook to fire a job twice with the same key and get one run; mute an event and see the email skipped; download a PDF | **Done** — see note below |
 
-## Phase 0 note
+## Phase 7 note
 
-Shipped as planned. One deviation: PostgreSQL is mapped to host port **5433** instead of 5432 — a pre-existing native Postgres install on the dev machine already owns 5432 (see `DECISIONS.md`). The DbContext currently holds only a trivial `SystemInfo` marker table (no real domain entities yet) to prove the migration pipeline ahead of Phase 1.
+- **Webhook trigger**: `POST /webhooks/jobs/{id}` with `X-Webhook-Token`. The token is returned once at create time and only its SHA-256 is stored. Without an `Idempotency-Key` header every call is a new run; with one, a replay returns the same run.
+- **Notification preferences**: four events (`JobCompleted`, `JobFailed`, `ApprovalRequested`, `FollowUpReminder`), default on, enforced in one decorator around `IEmailSender`.
+- **PDF export**: `?format=pdf` on the existing export endpoint, using QuestPDF under its Community license.
+- No automated tests were added in this phase by request; the existing suite was only adjusted to compile.
+
+## Still open
+
+- Live-verify Gmail delivery with a real app password (use `POST /admin/email/test`).
+- Tests for the Phase 7 code (webhook auth and idempotency, preference enforcement, exporters).
+- Out of scope by design: business-day calendars, SSO, multi-approver sign-off, retention policy.

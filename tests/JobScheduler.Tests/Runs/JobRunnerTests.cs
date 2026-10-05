@@ -110,6 +110,39 @@ public class JobRunnerTests
     }
 
     [Fact]
+    public async Task PlainTemplate_Success_NotifiesTheOwnerOfCompletion()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = false };
+
+        await Sut().ExecuteAsync(_run.Id, default);
+
+        _completion.Verify(c => c.NotifyCompletedAsync(_job, _run, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ApprovalTemplate_Success_DoesNotSendTheCompletionNotice()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = true };
+
+        await Sut().ExecuteAsync(_run.Id, default);
+
+        _completion.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CompletionNoticeFailure_DoesNotBreakTheRun_AndStillChains()
+    {
+        _job.Template = new JobTemplate { RequiresApproval = false };
+        _completion.Setup(c => c.NotifyCompletedAsync(It.IsAny<Job>(), It.IsAny<JobRun>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("smtp down"));
+
+        await Sut().ExecuteAsync(_run.Id, default); // must not throw
+
+        Assert.Equal(JobStatus.Completed, _job.Status);
+        _chainer.Verify(c => c.OnJobCompletedAsync(_job.Id, _run.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task FollowUpSchedulingFailure_DoesNotBreakTheRun()
     {
         _job.Template = new JobTemplate { RequiresApproval = true };

@@ -21,6 +21,7 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<CalculationRule> CalculationRules => Set<CalculationRule>();
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
     public DbSet<JobApproval> JobApprovals => Set<JobApproval>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,6 +122,13 @@ public class JobSchedulerDbContext : DbContext
             b.Property(e => e.IdempotencyKey).HasMaxLength(300);
             b.Property(e => e.To).HasMaxLength(320).IsRequired();
             b.Property(e => e.Subject).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<NotificationPreference>(b =>
+        {
+            b.HasKey(p => new { p.UserId, p.Event });
+            b.Property(p => p.Event).HasConversion<string>().HasMaxLength(32);
+            b.HasOne<User>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<UserClaim>(b =>

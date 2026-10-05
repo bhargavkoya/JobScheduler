@@ -1,6 +1,7 @@
 using JobScheduler.Application.Auth;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Runs;
+using JobScheduler.Domain.Users;
 using Microsoft.Extensions.Logging;
 
 namespace JobScheduler.Application.Runs;
@@ -73,6 +74,38 @@ public class OwnerFailureNotifier(IUserStore users, IEmailSender email, ILogger<
         var body = $"Job '{job.Name}' failed after {run.Attempt} attempt(s).\n\n" +
                    $"Failed step: {run.FailedStep}\nError: {run.Error}\n\n" +
                    "Open the job in the dashboard to retry it.";
-        await email.SendAsync(new EmailMessage(owner.Email, $"[Job Scheduler] {job.Name} FAILED", body, key), ct);
+        await email.SendAsync(new EmailMessage(owner.Email, $"[Job Scheduler] {job.Name} FAILED", body, key, NotificationEvent.JobFailed), ct);
+    }
+}
+
+/// <summary>Called once a run has finished and the job is Completed (not for jobs waiting on an approver).</summary>
+public interface ICompletionNotifier
+{
+    Task NotifyCompletedAsync(Job job, JobRun run, CancellationToken ct);
+}
+
+/// <summary>
+/// Tells the job owner a run completed. If the job's result email already goes to the owner, that email is the
+/// notification, so no second one is sent. Idempotent per run.
+/// </summary>
+public class OwnerCompletionNotifier(IUserStore users, IEmailSender email, ILogger<OwnerCompletionNotifier> log) : ICompletionNotifier
+{
+    public async Task NotifyCompletedAsync(Job job, JobRun run, CancellationToken ct)
+    {
+        var owner = await users.FindByIdAsync(job.OwnerId, ct);
+        if (owner is null)
+        {
+            log.LogWarning("Job {JobId} completed but its owner {OwnerId} was not found; no email sent.", job.Id, job.OwnerId);
+            return;
+        }
+
+        var recipient = JobConfig.Recipient(job);
+        if (string.Equals(recipient, owner.Email, StringComparison.OrdinalIgnoreCase)) return;
+
+        var body = $"Job '{job.Name}' completed successfully after {run.Attempt} attempt(s).\n\n" +
+                   "Open the job in the dashboard to see the run history.";
+        await email.SendAsync(new EmailMessage(
+            owner.Email, $"[Job Scheduler] {job.Name} completed", body,
+            $"{run.IdempotencyKey}:completed", NotificationEvent.JobCompleted), ct);
     }
 }

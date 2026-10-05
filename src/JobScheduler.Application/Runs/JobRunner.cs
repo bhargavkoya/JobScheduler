@@ -16,6 +16,7 @@ public class JobRunner(
     IEnumerable<IPipelineStep> pipeline,
     IJobQueue queue,
     IFailureNotifier failureNotifier,
+    ICompletionNotifier completionNotifier,
     IApprovalFollowUp followUp,
     IJobChainer chainer,
     TimeProvider clock,
@@ -98,7 +99,24 @@ public class JobRunner(
         await SaveAsync(ct);
 
         if (needsApproval) await ScheduleFollowUpAsync(job, ct);
-        else await ChainAsync(job, run, ct);
+        else
+        {
+            await NotifyCompletedAsync(job, run, ct);
+            await ChainAsync(job, run, ct);
+        }
+    }
+
+    private async Task NotifyCompletedAsync(Domain.Jobs.Job job, JobRun run, CancellationToken ct)
+    {
+        // The job is already Completed and saved; a mail problem must not change that or fail the worker.
+        try
+        {
+            await completionNotifier.NotifyCompletedAsync(job, run, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            log.LogError(ex, "Run {RunId}: could not send the completion notification.", run.Id);
+        }
     }
 
     private async Task ChainAsync(Domain.Jobs.Job job, JobRun run, CancellationToken ct)

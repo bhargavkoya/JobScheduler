@@ -191,3 +191,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: 
   }
   return (await res.json()) as T
 }
+
+export type NotificationEvent = 'JobCompleted' | 'JobFailed' | 'ApprovalRequested' | 'FollowUpReminder'
+
+export interface NotificationPreference {
+  event: NotificationEvent
+  enabled: boolean
+}

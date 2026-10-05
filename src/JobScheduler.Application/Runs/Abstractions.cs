@@ -64,7 +64,9 @@ public interface ICalculationEngine
         Guid jobId, ReportData report, IReadOnlyDictionary<string, string> config, CancellationToken ct);
 }
 
-public sealed record EmailMessage(string To, string Subject, string Body, string IdempotencyKey);
+/// <param name="Event">What kind of notification this is. When set, the recipient's notification preferences apply.</param>
+public sealed record EmailMessage(
+    string To, string Subject, string Body, string IdempotencyKey, JobScheduler.Domain.Users.NotificationEvent? Event = null);
 
 public interface IEmailSender
 {

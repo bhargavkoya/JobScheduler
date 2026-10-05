@@ -24,6 +24,9 @@ public class Job
     /// <summary>For EventBased jobs: the job whose completion triggers this one.</summary>
     public Guid? TriggerJobId { get; set; }
 
+    /// <summary>For TriggerBased jobs: SHA-256 (hex) of the webhook token. The token itself is shown once at creation.</summary>
+    public string? WebhookTokenHash { get; set; }
+
     public string ConfigJson { get; set; } = "{}";
     public RetryPolicy RetryPolicy { get; set; } = new();
     public Guid OwnerId { get; set; }
@@ -40,11 +43,14 @@ public class Job
 
     /// <summary>Jobs that haven't started or are waiting on a human can still be cancelled.</summary>
     public bool CanCancel => Status is JobStatus.Scheduled or JobStatus.NeedsManualAction
-        || (ScheduleType == ScheduleType.Recurrent && Status is JobStatus.Completed or JobStatus.Failed);
+        || (Repeats && Status is JobStatus.Completed or JobStatus.Failed);
 
-    /// <summary>Whether a new run may start now. A recurrent job is ready again once its previous run completed.</summary>
+    /// <summary>Whether a new run may start now. A recurrent or trigger-based job is ready again once its previous run completed.</summary>
     public bool CanStartRun => Status == JobStatus.Scheduled
-        || (ScheduleType == ScheduleType.Recurrent && Status == JobStatus.Completed);
+        || (Repeats && Status == JobStatus.Completed);
+
+    /// <summary>Recurrent and TriggerBased jobs fire again and again, so a completed run leaves them ready.</summary>
+    private bool Repeats => ScheduleType is ScheduleType.Recurrent or ScheduleType.TriggerBased;
 
     /// <summary>Queued or retrying. Allowed from Scheduled (first run) or Failed (manual retry).</summary>
     public void MarkInProgress()

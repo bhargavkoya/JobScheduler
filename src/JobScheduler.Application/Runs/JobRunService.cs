@@ -22,7 +22,8 @@ public sealed record JobRunDto(
     DateTime CreatedAtUtc,
     DateTime? StartedAtUtc,
     DateTime? FinishedAtUtc,
-    IReadOnlyList<RunStepDto> Steps);
+    IReadOnlyList<RunStepDto> Steps,
+    string? TriggerPayload = null);
 
 public interface IJobRunService
 {
@@ -78,5 +79,6 @@ public class JobRunService(IJobStore jobs, IJobRunStore runs, IRunOrchestrator o
         r.FinishedAtUtc,
         r.Steps.OrderBy(s => s.StartedAtUtc)
             .Select(s => new RunStepDto(s.Step, s.Status, s.Attempt, s.Output, s.StartedAtUtc, s.FinishedAtUtc))
-            .ToList());
+            .ToList(),
+        r.TriggerPayload);
 }

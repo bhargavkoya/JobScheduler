@@ -50,6 +50,9 @@ public class JobRun
     /// <summary>Null when fired by the scheduler.</summary>
     public Guid? TriggeredByUserId { get; set; }
 
+    /// <summary>TriggerBased runs: the raw webhook body that fired the run (audit trail). Null otherwise.</summary>
+    public string? TriggerPayload { get; set; }
+
     public RunStatus Status { get; set; } = RunStatus.Pending;
 
     /// <summary>How many times the pipeline has been attempted (first attempt = 1).</summary>

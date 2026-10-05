@@ -19,6 +19,7 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IRunOrchestrator, RunOrchestrator>();
         services.AddScoped<IJobRunService, JobRunService>();
         services.AddScoped<IJobChainer, JobChainer>();
+        services.AddScoped<ITriggerService, TriggerService>();
         services.AddScoped<JobRunner>();
         services.AddScoped<StartupRecovery>();
 

@@ -14,6 +14,9 @@ public interface IRunOrchestrator
     /// <summary>EventBased: the upstream job's run completed. One run per upstream run, however often this is called.</summary>
     Task<JobRun> EnqueueChainedAsync(Guid jobId, Guid upstreamRunId, CancellationToken ct);
     Task<JobRun> EnqueueManualAsync(Guid jobId, string? clientKey, Guid triggeredByUserId, CancellationToken ct);
+
+    /// <summary>TriggerBased: an external webhook call. The caller's key (if any) makes redelivered webhooks idempotent.</summary>
+    Task<JobRun> EnqueueTriggeredAsync(Guid jobId, string? clientKey, string? payload, CancellationToken ct);
     Task<JobRun> RetryAsync(Guid jobId, Guid triggeredByUserId, CancellationToken ct);
 }
 
@@ -49,11 +52,22 @@ public class RunOrchestrator(IJobStore jobs, IJobRunStore runs, IJobQueue queue,
     public async Task<JobRun> EnqueueManualAsync(Guid jobId, string? clientKey, Guid triggeredByUserId, CancellationToken ct)
     {
         var job = await LoadAsync(jobId, ct);
-        var suffix = string.IsNullOrWhiteSpace(clientKey)
+        return await EnqueueAsync(job, $"{job.Id}:manual:{KeySuffix(clientKey)}", triggeredByUserId, ct);
+    }
+
+    public async Task<JobRun> EnqueueTriggeredAsync(Guid jobId, string? clientKey, string? payload, CancellationToken ct)
+    {
+        var job = await LoadAsync(jobId, ct);
+        if (job.ScheduleType != ScheduleType.TriggerBased)
+            throw new Auth.ValidationException("Only TriggerBased jobs are fired by a webhook.");
+        return await EnqueueAsync(job, $"{job.Id}:trigger:{KeySuffix(clientKey)}", null, ct, payload);
+    }
+
+    /// <summary>The caller's key (trimmed, length-capped), or a fresh one so keyless calls are never deduplicated.</summary>
+    private static string KeySuffix(string? clientKey) =>
+        string.IsNullOrWhiteSpace(clientKey)
             ? Guid.NewGuid().ToString("N")
             : clientKey.Trim()[..Math.Min(clientKey.Trim().Length, MaxClientKeyLength)];
-        return await EnqueueAsync(job, $"{job.Id}:manual:{suffix}", triggeredByUserId, ct);
-    }
 
     public async Task<JobRun> RetryAsync(Guid jobId, Guid triggeredByUserId, CancellationToken ct)
     {
@@ -79,7 +93,7 @@ public class RunOrchestrator(IJobStore jobs, IJobRunStore runs, IJobQueue queue,
         return run;
     }
 
-    private async Task<JobRun> EnqueueAsync(Job job, string key, Guid? userId, CancellationToken ct)
+    private async Task<JobRun> EnqueueAsync(Job job, string key, Guid? userId, CancellationToken ct, string? triggerPayload = null)
     {
         // Idempotency: the same trigger returns the existing run and enqueues nothing.
         var existing = await runs.FindByKeyAsync(key, ct);
@@ -93,6 +107,7 @@ public class RunOrchestrator(IJobStore jobs, IJobRunStore runs, IJobQueue queue,
             JobId = job.Id,
             IdempotencyKey = key,
             TriggeredByUserId = userId,
+            TriggerPayload = triggerPayload,
             Status = RunStatus.Pending,
             CreatedAtUtc = clock.GetUtcNow().UtcDateTime
         };

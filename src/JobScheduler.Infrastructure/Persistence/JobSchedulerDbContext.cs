@@ -61,6 +61,7 @@ public class JobSchedulerDbContext : DbContext
             b.Property(j => j.ScheduleType).HasConversion<string>().HasMaxLength(32);
             b.Property(j => j.Status).HasConversion<string>().HasMaxLength(32);
             b.Property(j => j.Team).HasConversion<string>().HasMaxLength(32);
+            b.Property(j => j.WebhookTokenHash).HasMaxLength(64);
             b.Property(j => j.ConfigJson).HasColumnType("jsonb");
             b.OwnsOne(j => j.RetryPolicy);
             b.HasOne(j => j.Template).WithMany().HasForeignKey(j => j.TemplateId).OnDelete(DeleteBehavior.Restrict);
@@ -75,6 +76,7 @@ public class JobSchedulerDbContext : DbContext
             b.HasKey(r => r.Id);
             b.Property(r => r.IdempotencyKey).HasMaxLength(200).IsRequired();
             b.HasIndex(r => r.IdempotencyKey).IsUnique();
+            b.Property(r => r.TriggerPayload).HasMaxLength(8192);
             b.HasIndex(r => r.JobId);
             b.HasIndex(r => r.Status);
             b.Property(r => r.Status).HasConversion<string>().HasMaxLength(32);

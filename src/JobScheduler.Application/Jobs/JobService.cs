@@ -24,7 +24,7 @@ public class JobService(
     /// <summary>Schedule types that can actually be created in this phase.</summary>
     public static readonly IReadOnlySet<ScheduleType> CreatableScheduleTypes =
         new HashSet<ScheduleType>
-        { ScheduleType.Fixed, ScheduleType.Manual, ScheduleType.Recurrent, ScheduleType.EventBased };
+        { ScheduleType.Fixed, ScheduleType.Manual, ScheduleType.Recurrent, ScheduleType.EventBased, ScheduleType.TriggerBased };
 
     public async Task<JobDto> CreateAsync(CreateJobRequest request, CancellationToken ct)
     {
@@ -67,6 +67,9 @@ public class JobService(
         else if (request.TriggerJobId is not null)
             throw new ValidationException("Only EventBased jobs take a trigger job.");
 
+        // TriggerBased jobs get a webhook secret: shown once in the create response, stored only as a hash.
+        var webhookToken = request.ScheduleType == ScheduleType.TriggerBased ? WebhookTokens.Generate() : null;
+
         var config = ValidateConfig(template, request.Config);
         var approverId = await ResolveApproverAsync(template, config, ct);
         RetryValidation.Validate(request.RetryPolicy);
@@ -83,6 +86,7 @@ public class JobService(
             RecurrenceCron = recurrence?.Cron,
             RecurrenceText = recurrence?.Text,
             TriggerJobId = triggerJobId,
+            WebhookTokenHash = webhookToken is null ? null : WebhookTokens.Hash(webhookToken),
             ConfigJson = JsonSerializer.Serialize(config),
             RetryPolicy = new RetryPolicy { MaxAutoRetries = retry.MaxAutoRetries, BackoffSeconds = retry.BackoffSeconds },
             OwnerId = me.UserId,
@@ -100,7 +104,7 @@ public class JobService(
             await scheduler.ScheduleFixedAsync(job.Id, job.RunAtUtc!.Value, ct);
         else if (job.ScheduleType == ScheduleType.Recurrent)
             await scheduler.ScheduleRecurrentAsync(job.Id, job.RecurrenceCron!, ct);
-        return job.ToDto(Now(), atRisk);
+        return job.ToDto(Now(), atRisk) with { WebhookToken = webhookToken };
     }
 
     public async Task<IReadOnlyList<JobDto>> ListAsync(JobFilter filter, CancellationToken ct)

@@ -59,6 +59,11 @@ export function RunHistory({ jobId, status, refreshKey }: { jobId: string; statu
               attempt {run.attempt} · auto-retries used {run.autoRetriesUsed} · started {formatInstantIst(run.startedAtUtc)}
             </span>
           </div>
+          {run.triggerPayload && (
+            <p className="mt-1 truncate font-mono text-xs text-slate-500" title={run.triggerPayload}>
+              webhook payload: {run.triggerPayload}
+            </p>
+          )}
           {run.error && (
             <p className="mt-1 text-xs text-red-700">
               {run.failedStep ? `${STEP_LABELS[run.failedStep]}: ` : ''}

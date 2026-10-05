@@ -252,6 +252,17 @@ export function JobsPage() {
               >
                 Export CSV
               </button>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void downloadFile(`/jobs/${selected.id}/runs/export?format=pdf`, `${selected.name}-runs.pdf`, token).catch((e: unknown) =>
+                    setError(e instanceof Error ? e.message : 'Export failed'),
+                  )
+                }
+                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Export PDF
+              </button>
               {selected.canCancel && (
                 <button
                   disabled={busy}

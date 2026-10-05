@@ -21,6 +21,8 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IJobRunService, JobRunService>();
         services.AddScoped<IJobChainer, JobChainer>();
         services.AddScoped<ITriggerService, TriggerService>();
+        services.AddSingleton<IRunHistoryExporter, CsvRunHistoryExporter>();
+        services.AddSingleton<IRunHistoryExporter, PdfRunHistoryExporter>();
         services.AddScoped<JobRunner>();
         services.AddScoped<StartupRecovery>();
 

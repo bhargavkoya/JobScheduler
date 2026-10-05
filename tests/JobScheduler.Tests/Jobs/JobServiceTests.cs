@@ -222,11 +222,26 @@ public class JobServiceTests
     [Theory]
     [InlineData(ScheduleType.Recurrent)]
     [InlineData(ScheduleType.EventBased)]
-    [InlineData(ScheduleType.TriggerBased)]
-    public async Task Create_ScheduleTypesNotYetBuilt_Throw(ScheduleType type)
+    public async Task Create_RecurrentOrEventBased_WithoutTheirRequiredSettings_Throw(ScheduleType type)
     {
         _template.SupportedScheduleTypes = [type];
         await Assert.ThrowsAsync<ValidationException>(() => Sut().CreateAsync(Request(type), default));
+    }
+
+    [Fact]
+    public async Task Create_TriggerBased_ReturnsTheTokenOnceAndStoresOnlyItsHash()
+    {
+        _template.SupportedScheduleTypes = [ScheduleType.TriggerBased];
+        Job? saved = null;
+        _jobs.Setup(j => j.AddAsync(It.IsAny<Job>(), It.IsAny<CancellationToken>()))
+            .Callback<Job, CancellationToken>((j, _) => saved = j).Returns(Task.CompletedTask);
+
+        var dto = await Sut().CreateAsync(Request(ScheduleType.TriggerBased), default);
+
+        Assert.False(string.IsNullOrEmpty(dto.WebhookToken));
+        Assert.NotEqual(dto.WebhookToken, saved!.WebhookTokenHash);
+        Assert.True(WebhookTokens.Verify(dto.WebhookToken, saved.WebhookTokenHash));
+        Assert.False(WebhookTokens.Verify("wrong", saved.WebhookTokenHash));
     }
 
     [Theory]

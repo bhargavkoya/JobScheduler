@@ -18,10 +18,10 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 - **Webhook trigger**: `POST /webhooks/jobs/{id}` with `X-Webhook-Token`. The token is returned once at create time and only its SHA-256 is stored. Without an `Idempotency-Key` header every call is a new run; with one, a replay returns the same run.
 - **Notification preferences**: four events (`JobCompleted`, `JobFailed`, `ApprovalRequested`, `FollowUpReminder`), default on, enforced in one decorator around `IEmailSender`.
 - **PDF export**: `?format=pdf` on the existing export endpoint, using QuestPDF under its Community license.
-- No automated tests were added in this phase by request; the existing suite was only adjusted to compile.
+- Tests were added after the code (`tests/JobScheduler.Tests/Runs/Phase7Tests.cs`): webhook token and trigger service, triggered-run orchestration, preference enforcement and service, event tagging, owner completion notice, CSV/PDF exporters and the export service. The suite is 312 tests.
 
 ## Still open
 
 - Live-verify Gmail delivery with a real app password (use `POST /admin/email/test`).
-- Tests for the Phase 7 code (webhook auth and idempotency, preference enforcement, exporters).
+- A manual run-through against Postgres (the tests mock the database, so the two new migrations are untested).
 - Out of scope by design: business-day calendars, SSO, multi-approver sign-off, retention policy.

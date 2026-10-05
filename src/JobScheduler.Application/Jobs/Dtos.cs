@@ -66,4 +66,6 @@ public sealed record JobDto(
     bool IsAtRisk,
     string? AtRiskReason,
     string? RecurrenceText = null,
-    Guid? TriggerJobId = null);
+    Guid? TriggerJobId = null,
+    /// <summary>TriggerBased jobs: the webhook secret. Returned only by the create call; only its hash is stored.</summary>
+    string? WebhookToken = null);

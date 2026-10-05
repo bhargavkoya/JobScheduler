@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { apiFetch, downloadCsv, type Job, type JobStatus, type ScheduleType, type Team } from '../api'
+import { apiFetch, downloadFile, webhookUrl, type Job, type JobStatus, type ScheduleType, type Team } from '../api'
 import { useAuth } from '../auth/AuthContext'
 import { CreateJobForm } from './CreateJobForm'
 import { ApprovalHistory } from './ApprovalHistory'
@@ -206,7 +206,7 @@ export function JobsPage() {
                 <td className="px-3 py-2 font-medium text-slate-800">{j.name}</td>
                 <td className="px-3 py-2">{j.templateName}</td>
                 <td className="px-3 py-2">{j.scheduleType === 'Manual' ? 'Manual kickoff' : j.scheduleType}</td>
-                <td className="px-3 py-2">{j.recurrenceText ?? (j.scheduleType === 'EventBased' ? 'After another job' : formatIst(j.runAtIst))}</td>
+                <td className="px-3 py-2">{j.recurrenceText ?? (j.scheduleType === 'EventBased' ? 'After another job' : j.scheduleType === 'TriggerBased' ? 'On webhook' : formatIst(j.runAtIst))}</td>
                 <td className="px-3 py-2">{j.team}</td>
                 <td className="px-3 py-2">
                   <StatusBadge status={j.status} />
@@ -244,13 +244,24 @@ export function JobsPage() {
               <button
                 disabled={busy}
                 onClick={() =>
-                  void downloadCsv(`/jobs/${selected.id}/runs/export`, `${selected.name}-runs.csv`, token).catch((e: unknown) =>
+                  void downloadFile(`/jobs/${selected.id}/runs/export`, `${selected.name}-runs.csv`, token).catch((e: unknown) =>
                     setError(e instanceof Error ? e.message : 'Export failed'),
                   )
                 }
                 className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
               >
                 Export CSV
+              </button>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void downloadFile(`/jobs/${selected.id}/runs/export?format=pdf`, `${selected.name}-runs.pdf`, token).catch((e: unknown) =>
+                    setError(e instanceof Error ? e.message : 'Export failed'),
+                  )
+                }
+                className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Export PDF
               </button>
               {selected.canCancel && (
                 <button
@@ -281,6 +292,11 @@ export function JobsPage() {
               </div>
             ))}
           </dl>
+          {selected.scheduleType === 'TriggerBased' && (
+            <p className="break-all rounded bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">
+              curl -X POST {webhookUrl(selected.id)} -H "X-Webhook-Token: &lt;token shown at creation&gt;" -H "Idempotency-Key: &lt;unique-id&gt;"
+            </p>
+          )}
           {selected.requiresApproval && (
             <div>
               <h4 className="mb-2 font-medium text-slate-800">Approvals</h4>

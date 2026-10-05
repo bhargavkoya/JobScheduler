@@ -6,6 +6,7 @@ import {
   type Job,
   type Recurrence,
   WEEKDAYS,
+  webhookUrl,
   type ScheduleType,
   type Template,
 } from '../api'
@@ -26,6 +27,7 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   const [triggerJobId, setTriggerJobId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [created, setCreated] = useState<Job | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -90,13 +92,39 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
         ...(scheduleType === 'EventBased' ? { triggerJobId } : {}),
         ...(scheduleType === 'Fixed' ? { runAtIst: runAtIst.length === 16 ? `${runAtIst}:00` : runAtIst } : {}),
       }
-      await apiFetch<Job>('/jobs', { method: 'POST', body: JSON.stringify(payload) }, token)
-      onCreated()
+      const job = await apiFetch<Job>('/jobs', { method: 'POST', body: JSON.stringify(payload) }, token)
+      // The webhook secret is returned only now, so keep the form open until the user has copied it.
+      if (job.webhookToken) setCreated(job)
+      else onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create job')
     } finally {
       setBusy(false)
     }
+  }
+
+  if (created?.webhookToken) {
+    const curl = `curl -X POST ${webhookUrl(created.id)} -H "X-Webhook-Token: ${created.webhookToken}" -H "Idempotency-Key: <unique-id>" -d '{"event":"report-ready"}'`
+    return (
+      <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-slate-700">
+        <h3 className="font-medium text-slate-800">“{created.name}” created</h3>
+        <p>Copy the webhook token now. It is shown only once and cannot be recovered.</p>
+        <p className="break-all rounded bg-white px-3 py-2 font-mono text-xs">{created.webhookToken}</p>
+        <p className="break-all rounded bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">{curl}</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(curl)}
+            className="rounded border border-slate-300 bg-white px-3 py-2 hover:bg-slate-100"
+          >
+            Copy curl
+          </button>
+          <button type="button" onClick={onCreated} className="rounded bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-700">
+            Done
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const input = 'mt-1 w-full rounded border border-slate-300 px-3 py-2 text-slate-900'
@@ -133,7 +161,7 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
         <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as ScheduleType)} className={input}>
           {allowedTypes.map((s) => (
             <option key={s} value={s}>
-              {s === 'Manual' ? 'Manual kickoff' : s}
+              {s === 'Manual' ? 'Manual kickoff' : s === 'TriggerBased' ? 'Trigger-based (webhook)' : s}
             </option>
           ))}
         </select>

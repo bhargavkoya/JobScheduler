@@ -3,6 +3,7 @@ using System;
 using JobScheduler.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JobScheduler.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(JobSchedulerDbContext))]
-    partial class JobSchedulerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005102731_Phase7WebhookTriggers")]
+    partial class Phase7WebhookTriggers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -333,23 +336,6 @@ namespace JobScheduler.Infrastructure.Persistence.Migrations
                     b.ToTable("SentEmails");
                 });
 
-            modelBuilder.Entity("JobScheduler.Domain.Users.NotificationPreference", b =>
-                {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Event")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
-
-                    b.HasKey("UserId", "Event");
-
-                    b.ToTable("NotificationPreferences");
-                });
-
             modelBuilder.Entity("JobScheduler.Domain.Users.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -575,15 +561,6 @@ namespace JobScheduler.Infrastructure.Persistence.Migrations
                     b.HasOne("JobScheduler.Domain.Runs.JobRun", null)
                         .WithMany("Steps")
                         .HasForeignKey("RunId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("JobScheduler.Domain.Users.NotificationPreference", b =>
-                {
-                    b.HasOne("JobScheduler.Domain.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

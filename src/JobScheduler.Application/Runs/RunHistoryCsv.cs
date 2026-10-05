@@ -10,7 +10,7 @@ public static class RunHistoryCsv
     private static readonly string[] Header =
     [
         "RunId", "IdempotencyKey", "Status", "Attempts", "AutoRetriesUsed", "FailedStep", "Error",
-        "CreatedIst", "StartedIst", "FinishedIst", "Steps"
+        "CreatedIst", "StartedIst", "FinishedIst", "Steps", "TriggerPayload"
     ];
 
     public static string Build(IEnumerable<JobRunDto> runs)
@@ -25,7 +25,7 @@ public static class RunHistoryCsv
                 r.Id.ToString(), r.IdempotencyKey, r.Status.ToString(),
                 r.Attempt.ToString(CultureInfo.InvariantCulture), r.AutoRetriesUsed.ToString(CultureInfo.InvariantCulture),
                 r.FailedStep?.ToString() ?? "", r.Error ?? "",
-                Ist(r.CreatedAtUtc), Ist(r.StartedAtUtc), Ist(r.FinishedAtUtc), steps
+                Ist(r.CreatedAtUtc), Ist(r.StartedAtUtc), Ist(r.FinishedAtUtc), steps, r.TriggerPayload ?? ""
             };
             sb.Append(string.Join(',', cells.Select(Escape))).Append("\r\n");
         }

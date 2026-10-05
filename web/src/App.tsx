@@ -5,6 +5,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute'
 import { CatalogPage } from './jobs/CatalogPage'
 import { JobsPage } from './jobs/JobsPage'
 import { ManualQueuePage } from './jobs/ManualQueuePage'
+import { NotificationsPage } from './jobs/NotificationsPage'
 
 type HealthState =
   | { status: 'loading' }
@@ -51,7 +52,7 @@ function Health() {
 
 function Home() {
   const { user, token, logout } = useAuth()
-  const [tab, setTab] = useState<'jobs' | 'queue' | 'catalog' | 'access'>('jobs')
+  const [tab, setTab] = useState<'jobs' | 'queue' | 'catalog' | 'notifications' | 'access'>('jobs')
   const [queueCount, setQueueCount] = useState(0)
   const [queueTick, setQueueTick] = useState(0)
 
@@ -92,6 +93,7 @@ function Home() {
           ['jobs', 'Jobs'],
           ['queue', 'Manual actions'],
           ['catalog', 'Catalog'],
+          ['notifications', 'Notifications'],
           ['access', 'My access'],
         ] as const).map(([key, label]) => (
           <button
@@ -114,6 +116,7 @@ function Home() {
         {tab === 'jobs' && <JobsPage />}
         {tab === 'queue' && <ManualQueuePage onChanged={() => setQueueTick((n) => n + 1)} />}
         {tab === 'catalog' && <CatalogPage />}
+        {tab === 'notifications' && <NotificationsPage />}
         {tab === 'access' && (
           <>
             <section className="rounded-lg border border-slate-200 bg-white p-4">

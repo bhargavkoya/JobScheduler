@@ -1,6 +1,7 @@
 using System.Text.Json;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Runs;
+using JobScheduler.Domain.Users;
 
 namespace JobScheduler.Application.Runs;
 
@@ -8,6 +9,16 @@ internal static class JobConfig
 {
     public static Dictionary<string, string> Read(Job job) =>
         JsonSerializer.Deserialize<Dictionary<string, string>>(job.ConfigJson) ?? new();
+
+    /// <summary>The first filled-in email field of the job's template: who the run's result is mailed to.</summary>
+    public static string? Recipient(Job job)
+    {
+        var config = Read(job);
+        return job.Template?.Fields
+            .Where(f => f.Type == FieldType.Email)
+            .Select(f => config.GetValueOrDefault(f.Name))
+            .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+    }
 }
 
 public class DownloadReportStep(IFinanceAppClient finance) : IPipelineStep
@@ -48,12 +59,7 @@ public class SendEmailStep(IEmailSender email) : IPipelineStep
 
     public async Task<string> ExecuteAsync(StepContext context, CancellationToken ct)
     {
-        var config = JobConfig.Read(context.Job);
-        var recipient = context.Job.Template?.Fields
-            .Where(f => f.Type == FieldType.Email)
-            .Select(f => config.GetValueOrDefault(f.Name))
-            .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
-
+        var recipient = JobConfig.Recipient(context.Job);
         if (recipient is null)
             return "No recipient configured; email skipped.";
 
@@ -70,7 +76,9 @@ public class SendEmailStep(IEmailSender email) : IPipelineStep
             ? $"Job '{context.Job.Name}' is ready and needs your approval.\n\n{summary}\n\nOpen the Manual Action queue in the dashboard to approve or reject it."
             : $"Job '{context.Job.Name}' finished its run.\n\n{summary}";
 
-        await email.SendAsync(new EmailMessage(recipient, subject, body, $"{context.Run.IdempotencyKey}:email"), ct);
+        await email.SendAsync(new EmailMessage(
+            recipient, subject, body, $"{context.Run.IdempotencyKey}:email",
+            needsApproval ? NotificationEvent.ApprovalRequested : NotificationEvent.JobCompleted), ct);
         return $"Email sent to {recipient}.";
     }
 }

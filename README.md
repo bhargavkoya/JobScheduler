@@ -76,8 +76,20 @@ dotnet user-secrets set "Email:Password" "<16-char app password>" --project src/
 ## Recurrent and chained jobs, export
 
 - **Recurrent**: Daily / Weekly / Monthly at an IST time (monthly day capped at 28). Stored as a Quartz cron, evaluated in IST, rebuilt from the database on restart. Each firing is one run, keyed by the tick time, so a double fire cannot create two runs. A firing is skipped while the previous run is still going, waiting on approval, or Failed (retry it first). Cancel stops the recurrence.
-- **Event-based**: pick an upstream job; when its run completes (including after approval) the dependent starts, once per upstream run. TriggerBased (webhooks) is still not supported.
-- `GET /jobs/{id}/runs/export` (or the Export CSV button) returns the run history as CSV, times in IST.
+- **Event-based**: pick an upstream job; when its run completes (including after approval) the dependent starts, once per upstream run.
+- `GET /jobs/{id}/runs/export` (or the Export CSV / Export PDF buttons) returns the run history, times in IST. CSV is the default; add `?format=pdf` for a PDF (QuestPDF, Community license).
+
+## Webhooks, notification preferences, Gmail check
+
+- **Trigger-based** jobs are fired by an external system: `POST /webhooks/jobs/{id}` with header `X-Webhook-Token`. The token is shown **once** when you create the job (only a hash is stored). Add an `Idempotency-Key` header and a redelivered webhook returns the same run instead of starting a second one; without it every call starts a run. The request body (max 8 KB) is kept on the run and shown in run history. A wrong token, an unknown job and a non-webhook job all return 401.
+
+```bash
+curl -X POST http://localhost:5031/webhooks/jobs/<job-id> \
+  -H "X-Webhook-Token: <token>" -H "Idempotency-Key: report-2026-10-05" -d '{"event":"report-ready"}'
+```
+
+- **Notification preferences** (Notifications tab, `GET`/`PUT /me/notification-preferences`): each user can switch off `JobCompleted`, `JobFailed`, `ApprovalRequested` and `FollowUpReminder` emails. Everything is on by default. A muted email is skipped and not recorded as sent. Addresses that are not registered users (a free-text recipient on a job) cannot have preferences and always get mail.
+- **Check Gmail really works**: set the two secrets above, restart, log in as an admin and call `POST /admin/email/test` (Swagger works). It sends one message to the admin's own address and returns 409 if Gmail is not configured or 502 with Gmail's error if it rejects the login.
 
 ## Commands
 

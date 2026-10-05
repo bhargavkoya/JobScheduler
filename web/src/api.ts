@@ -67,6 +67,8 @@ export interface Job {
   atRiskReason: string | null
   recurrenceText: string | null
   triggerJobId: string | null
+  /** TriggerBased jobs: only present on the create response; shown once. */
+  webhookToken?: string | null
 }
 
 export interface ManualActionItem {
@@ -111,6 +113,7 @@ export interface JobRun {
   startedAtUtc: string | null
   finishedAtUtc: string | null
   steps: RunStep[]
+  triggerPayload: string | null
 }
 
 export interface CreateJobPayload {
@@ -135,8 +138,8 @@ export interface Recurrence {
 
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-/** Only these can be created so far; the rest arrive in later phases. */
-export const CREATABLE_SCHEDULE_TYPES: ScheduleType[] = ['Fixed', 'Manual', 'Recurrent', 'EventBased']
+/** Every schedule type can be created now. */
+export const CREATABLE_SCHEDULE_TYPES: ScheduleType[] = ['Fixed', 'Manual', 'Recurrent', 'EventBased', 'TriggerBased']
 
 export class ApiError extends Error {
   status: number
@@ -154,8 +157,8 @@ export function formatInstantIst(utc: string | null): string {
   return new Date(value).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST'
 }
 
-/** Downloads an authenticated CSV (a plain link cannot send the bearer token). */
-export async function downloadCsv(path: string, filename: string, token?: string | null): Promise<void> {
+/** Downloads an authenticated file such as CSV or PDF (a plain link cannot send the bearer token). */
+export async function downloadFile(path: string, filename: string, token?: string | null): Promise<void> {
   const res = await fetch(`${API_BASE_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
   if (!res.ok) throw new ApiError(res.status, `Export failed (HTTP ${res.status})`)
   const url = URL.createObjectURL(await res.blob())
@@ -164,6 +167,10 @@ export async function downloadCsv(path: string, filename: string, token?: string
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export function webhookUrl(jobId: string): string {
+  return `${API_BASE_URL}/webhooks/jobs/${jobId}`
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
@@ -183,4 +190,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: 
     throw new ApiError(res.status, message)
   }
   return (await res.json()) as T
+}
+
+export type NotificationEvent = 'JobCompleted' | 'JobFailed' | 'ApprovalRequested' | 'FollowUpReminder'
+
+export interface NotificationPreference {
+  event: NotificationEvent
+  enabled: boolean
 }

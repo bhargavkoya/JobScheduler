@@ -82,6 +82,9 @@ public class TemplateSeeder(JobSchedulerDbContext db)
         await EnsureScheduleTypeAsync("Daily Reconciliation Report", ScheduleType.Recurrent, ct);
         await EnsureScheduleTypeAsync("Follow-up Chaser", ScheduleType.EventBased, ct);
 
+        // Phase 7: the reconciliation report can also be fired by an external webhook.
+        await EnsureScheduleTypeAsync("Daily Reconciliation Report", ScheduleType.TriggerBased, ct);
+
         // Same for the approval template: it gained RequiresApproval and the follow-up field in Phase 5.
         var approval = await db.JobTemplates.FirstAsync(t => t.Name == "Capital Allocation Approval", ct);
         if (!approval.RequiresApproval || approval.Fields.All(f => f.Name != FollowUpField.Name))

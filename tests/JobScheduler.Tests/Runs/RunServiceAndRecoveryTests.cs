@@ -36,7 +36,9 @@ public class JobRunServiceTests
             .ReturnsAsync(new JobRun { JobId = _job.Id });
     }
 
-    private JobRunService Sut() => new(_jobs.Object, _runs.Object, _orchestrator.Object, _me.Object);
+    private JobRunService Sut() => new(
+        _jobs.Object, _runs.Object, _orchestrator.Object, _me.Object,
+        [new CsvRunHistoryExporter()], new Mock<IUserStore>().Object, TimeProvider.System, new AtRiskPolicy(TimeSpan.FromMinutes(15)));
 
     [Fact]
     public async Task RunNow_ByOwner_PassesIdempotencyKeyAndUserToOrchestrator()

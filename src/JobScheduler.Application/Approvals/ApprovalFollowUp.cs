@@ -3,6 +3,7 @@ using JobScheduler.Application.Auth;
 using JobScheduler.Application.Jobs;
 using JobScheduler.Application.Runs;
 using JobScheduler.Domain.Jobs;
+using JobScheduler.Domain.Users;
 using Microsoft.Extensions.Logging;
 
 namespace JobScheduler.Application.Approvals;
@@ -59,6 +60,6 @@ public class ApprovalFollowUp(
             $"[Job Scheduler] Reminder: '{job.Name}' is still waiting for your approval",
             $"Job '{job.Name}' has been waiting for your decision since {job.StatusChangedAtUtc:yyyy-MM-dd HH:mm} UTC.\n\n" +
             "Open the Manual Action queue in the dashboard to approve or reject it.",
-            key), ct);
+            key, NotificationEvent.FollowUpReminder), ct);
     }
 }

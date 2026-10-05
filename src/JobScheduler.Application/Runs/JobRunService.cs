@@ -22,18 +22,23 @@ public sealed record JobRunDto(
     DateTime CreatedAtUtc,
     DateTime? StartedAtUtc,
     DateTime? FinishedAtUtc,
-    IReadOnlyList<RunStepDto> Steps);
+    IReadOnlyList<RunStepDto> Steps,
+    string? TriggerPayload = null);
 
 public interface IJobRunService
 {
     Task<JobRunDto> RunNowAsync(Guid jobId, string? idempotencyKey, CancellationToken ct);
     Task<JobRunDto> RetryAsync(Guid jobId, CancellationToken ct);
     Task<IReadOnlyList<JobRunDto>> ListRunsAsync(Guid jobId, CancellationToken ct);
-    Task<string> ExportRunsCsvAsync(Guid jobId, CancellationToken ct);
+
+    /// <summary>Run history in the requested format ("csv" or "pdf"). Unknown formats are a validation error.</summary>
+    Task<ExportedFile> ExportRunsAsync(Guid jobId, string? format, CancellationToken ct);
 }
 
 /// <summary>User-facing run operations: visibility and permission checks, then delegate to the orchestrator.</summary>
-public class JobRunService(IJobStore jobs, IJobRunStore runs, IRunOrchestrator orchestrator, ICurrentUser me) : IJobRunService
+public class JobRunService(
+    IJobStore jobs, IJobRunStore runs, IRunOrchestrator orchestrator, ICurrentUser me,
+    IEnumerable<IRunHistoryExporter> exporters, IUserStore users, TimeProvider clock, AtRiskPolicy atRisk) : IJobRunService
 {
     public async Task<JobRunDto> RunNowAsync(Guid jobId, string? idempotencyKey, CancellationToken ct)
     {
@@ -61,8 +66,18 @@ public class JobRunService(IJobStore jobs, IJobRunStore runs, IRunOrchestrator o
         return (await runs.ListForJobAsync(jobId, ct)).Select(ToDto).ToList();
     }
 
-    public async Task<string> ExportRunsCsvAsync(Guid jobId, CancellationToken ct) =>
-        RunHistoryCsv.Build(await ListRunsAsync(jobId, ct));
+    public async Task<ExportedFile> ExportRunsAsync(Guid jobId, string? format, CancellationToken ct)
+    {
+        var wanted = string.IsNullOrWhiteSpace(format) ? "csv" : format.Trim().ToLowerInvariant();
+        var exporter = exporters.FirstOrDefault(e => e.Format == wanted)
+            ?? throw new ValidationException(
+                $"Unsupported export format '{format}'. Use one of: {string.Join(", ", exporters.Select(e => e.Format))}.");
+
+        var job = await JobAccess.LoadVisibleAsync(jobs, me, jobId, ct);
+        var owner = await users.FindByIdAsync(job.OwnerId, ct);
+        var history = (await runs.ListForJobAsync(jobId, ct)).Select(ToDto).ToList();
+        return exporter.Export(new RunHistoryReport(job.ToDto(clock.GetUtcNow().UtcDateTime, atRisk), owner?.Email, history));
+    }
 
     internal static JobRunDto ToDto(JobRun r) => new(
         r.Id,
@@ -78,5 +93,6 @@ public class JobRunService(IJobStore jobs, IJobRunStore runs, IRunOrchestrator o
         r.FinishedAtUtc,
         r.Steps.OrderBy(s => s.StartedAtUtc)
             .Select(s => new RunStepDto(s.Step, s.Status, s.Attempt, s.Output, s.StartedAtUtc, s.FinishedAtUtc))
-            .ToList());
+            .ToList(),
+        r.TriggerPayload);
 }

@@ -1,6 +1,7 @@
 using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Calculation;
 using JobScheduler.Application.Jobs;
+using JobScheduler.Application.Notifications;
 using JobScheduler.Application.Runs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,9 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IRunOrchestrator, RunOrchestrator>();
         services.AddScoped<IJobRunService, JobRunService>();
         services.AddScoped<IJobChainer, JobChainer>();
+        services.AddScoped<ITriggerService, TriggerService>();
+        services.AddSingleton<IRunHistoryExporter, CsvRunHistoryExporter>();
+        services.AddSingleton<IRunHistoryExporter, PdfRunHistoryExporter>();
         services.AddScoped<JobRunner>();
         services.AddScoped<StartupRecovery>();
 
@@ -48,14 +52,22 @@ public static class ExecutionServiceCollectionExtensions
         {
             services.AddSingleton<IEmailTransport, SmtpEmailTransport>();
             services.AddScoped<ISentEmailStore, EfSentEmailStore>();
-            services.AddScoped<IEmailSender, IdempotentEmailSender>();
+            services.AddScoped<IdempotentEmailSender>();
+            services.AddScoped<IEmailSender>(sp => ActivatorUtilities.CreateInstance<PreferenceAwareEmailSender>(
+                sp, (IEmailSender)sp.GetRequiredService<IdempotentEmailSender>()));
         }
         else
         {
             // No Gmail credentials configured: log instead of sending so the app still runs and tests stay green.
-            services.AddSingleton<IEmailSender, LoggingEmailSender>();
+            // Singleton, because it dedupes by key in memory; the preference check wraps it per request.
+            services.AddSingleton<LoggingEmailSender>();
+            services.AddScoped<IEmailSender>(sp => ActivatorUtilities.CreateInstance<PreferenceAwareEmailSender>(
+                sp, (IEmailSender)sp.GetRequiredService<LoggingEmailSender>()));
         }
         services.AddScoped<IFailureNotifier, OwnerFailureNotifier>();
+        services.AddScoped<ICompletionNotifier, OwnerCompletionNotifier>();
+        services.AddScoped<INotificationPreferenceStore, EfNotificationPreferenceStore>();
+        services.AddScoped<INotificationPreferenceService, NotificationPreferenceService>();
 
         services.AddScoped<IApprovalStore, EfApprovalStore>();
         services.AddScoped<IApprovalService, ApprovalService>();

@@ -33,5 +33,11 @@ public class JobTemplate
     /// <summary>When set, a successful run ends in NeedsManualAction and waits for the single approver.</summary>
     public bool RequiresApproval { get; set; }
 
+    /// <summary>
+    /// Jobs of this template take uploaded CSV files and record-level reconciliation rules instead of pulling
+    /// a report from the finance app.
+    /// </summary>
+    public bool IsFileReconciliation { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

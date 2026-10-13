@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The documented sample files double as test fixtures, so README and behaviour cannot drift apart. -->
+    <None Include="..\..\docs\samples\*.csv" Link="samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\JobScheduler.Application\JobScheduler.Application.csproj" />
     <ProjectReference Include="..\..\src\JobScheduler.Domain\JobScheduler.Domain.csproj" />
     <ProjectReference Include="..\..\src\JobScheduler.Infrastructure\JobScheduler.Infrastructure.csproj" />

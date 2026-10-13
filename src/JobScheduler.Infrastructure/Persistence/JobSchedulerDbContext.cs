@@ -1,4 +1,5 @@
 using JobScheduler.Domain.Jobs;
+using JobScheduler.Domain.Reconciliation;
 using JobScheduler.Domain.Runs;
 using JobScheduler.Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,10 @@ public class JobSchedulerDbContext : DbContext
     public DbSet<SentEmail> SentEmails => Set<SentEmail>();
     public DbSet<JobApproval> JobApprovals => Set<JobApproval>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<InputFile> InputFiles => Set<InputFile>();
+    public DbSet<InputFileContent> InputFileContents => Set<InputFileContent>();
+    public DbSet<ReconciliationRule> ReconciliationRules => Set<ReconciliationRule>();
+    public DbSet<ReconciliationResult> ReconciliationResults => Set<ReconciliationResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +134,60 @@ public class JobSchedulerDbContext : DbContext
             b.HasKey(p => new { p.UserId, p.Event });
             b.Property(p => p.Event).HasConversion<string>().HasMaxLength(32);
             b.HasOne<User>().WithMany().HasForeignKey(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InputFile>(b =>
+        {
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Alias).HasMaxLength(30).IsRequired();
+            b.Property(f => f.FileName).HasMaxLength(260).IsRequired();
+            b.Property(f => f.Sha256).HasMaxLength(64).IsRequired();
+            b.Property(f => f.HeadersJson).HasColumnType("jsonb");
+            // Not unique on purpose: replacing a file supersedes the old row and reuses its alias in one save, and the
+            // services already guarantee one active file per alias.
+            b.HasIndex(f => new { f.JobId, f.Alias });
+            b.HasOne<Job>().WithMany().HasForeignKey(f => f.JobId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<User>().WithMany().HasForeignKey(f => f.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InputFileContent>(b =>
+        {
+            b.HasKey(c => c.FileId);
+            b.Property(c => c.Bytes).IsRequired();
+            b.HasOne<InputFile>().WithOne().HasForeignKey<InputFileContent>(c => c.FileId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReconciliationRule>(b =>
+        {
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Name).HasMaxLength(200).IsRequired();
+            b.Property(r => r.LeftAlias).HasMaxLength(30).IsRequired();
+            b.Property(r => r.RightAlias).HasMaxLength(30).IsRequired();
+            b.Property(r => r.LeftKeyColumn).HasMaxLength(200);
+            b.Property(r => r.RightKeyColumn).HasMaxLength(200);
+            b.Property(r => r.LeftExpression).HasMaxLength(2000).IsRequired();
+            b.Property(r => r.RightExpression).HasMaxLength(2000).IsRequired();
+            b.Property(r => r.Operator).HasConversion<string>().HasMaxLength(32);
+            b.Property(r => r.ToleranceMode).HasConversion<string>().HasMaxLength(32);
+            b.Property(r => r.Tolerance).HasPrecision(28, 10);
+            b.HasIndex(r => new { r.JobId, r.Position });
+            b.HasOne<Job>().WithMany().HasForeignKey(r => r.JobId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReconciliationResult>(b =>
+        {
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).ValueGeneratedOnAdd();
+            b.Property(r => r.RuleName).HasMaxLength(200).IsRequired();
+            b.Property(r => r.RecordKey).HasMaxLength(500).IsRequired();
+            b.Property(r => r.Reason).HasMaxLength(1000).IsRequired();
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(r => r.LeftValue).HasPrecision(28, 10);
+            b.Property(r => r.RightValue).HasPrecision(28, 10);
+            b.Property(r => r.Difference).HasPrecision(28, 10);
+            b.HasIndex(r => new { r.RunId, r.RuleId, r.Status });
+            b.HasOne<JobRun>().WithMany().HasForeignKey(r => r.RunId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<ReconciliationRule>().WithMany().HasForeignKey(r => r.RuleId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<UserClaim>(b =>

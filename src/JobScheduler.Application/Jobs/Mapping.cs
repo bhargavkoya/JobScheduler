@@ -13,7 +13,8 @@ internal static class Mapping
         t.Fields.Select(f => new TemplateFieldDto(f.Name, f.Label, f.Type, f.Required)).ToList(),
         new RetryPolicyDto(t.DefaultRetryPolicy.MaxAutoRetries, t.DefaultRetryPolicy.BackoffSeconds),
         t.IsApproved,
-        t.RequiresApproval);
+        t.RequiresApproval,
+        t.IsFileReconciliation);
 
     public static JobDto ToDto(this Job j, DateTime nowUtc, AtRiskPolicy atRisk)
     {

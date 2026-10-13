@@ -192,7 +192,7 @@ public class JobServiceScheduleTests
         _templates.Setup(t => t.FindAsync(_template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_template);
     }
 
-    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object, _users.Object, AtRiskPolicy.Default);
+    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object, _users.Object, AtRiskPolicy.Default, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationSetupService>());
 
     private CreateJobRequest Request(ScheduleType type, RecurrenceDto? rec = null, Guid? trigger = null) =>
         new(_template.Id, "job", type, null, new Dictionary<string, string> { ["report"] = "r" }, null, rec, trigger);

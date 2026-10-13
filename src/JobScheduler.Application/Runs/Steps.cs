@@ -1,4 +1,5 @@
 using System.Text.Json;
+using JobScheduler.Application.Reconciliation;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Runs;
 using JobScheduler.Domain.Users;
@@ -21,12 +22,16 @@ internal static class JobConfig
     }
 }
 
-public class DownloadReportStep(IFinanceAppClient finance) : IPipelineStep
+public class DownloadReportStep(IFinanceAppClient finance, IReconciliationRunner reconciliation) : IPipelineStep
 {
     public PipelineStep Name => PipelineStep.DownloadReport;
 
     public async Task<string> ExecuteAsync(StepContext context, CancellationToken ct)
     {
+        // File reconciliation jobs have no finance report: this step pins the uploaded files for the run instead.
+        if (context.Job.Template?.IsFileReconciliation == true)
+            return await reconciliation.SnapshotInputsAsync(context.Job, ct);
+
         var config = JobConfig.Read(context.Job);
         var reportName = config.GetValueOrDefault("reportName") ?? context.Job.Name;
 
@@ -37,7 +42,7 @@ public class DownloadReportStep(IFinanceAppClient finance) : IPipelineStep
     }
 }
 
-public class CalculateStep(ICalculationEngine engine) : IPipelineStep
+public class CalculateStep(ICalculationEngine engine, IReconciliationRunner reconciliation) : IPipelineStep
 {
     public PipelineStep Name => PipelineStep.Calculate;
 
@@ -45,6 +50,10 @@ public class CalculateStep(ICalculationEngine engine) : IPipelineStep
     {
         if (!context.PriorOutputs.TryGetValue(PipelineStep.DownloadReport, out var downloadOutput))
             throw new InvalidOperationException("Calculate ran before DownloadReport produced output.");
+
+        if (context.Job.Template?.IsFileReconciliation == true)
+            return JsonSerializer.Serialize(
+                await reconciliation.RunAsync(context.Job, context.Run, downloadOutput, ct));
 
         var report = JsonSerializer.Deserialize<ReportData>(downloadOutput)
             ?? throw new InvalidOperationException("Download output could not be read.");

@@ -14,7 +14,8 @@ public sealed record TemplateDto(
     IReadOnlyList<TemplateFieldDto> Fields,
     RetryPolicyDto DefaultRetryPolicy,
     bool IsApproved,
-    bool RequiresApproval);
+    bool RequiresApproval,
+    bool IsFileReconciliation = false);
 
 public sealed record SaveTemplateRequest(
     string Name,
@@ -35,7 +36,9 @@ public sealed record CreateJobRequest(
     /// <summary>Recurrent jobs only.</summary>
     RecurrenceDto? Recurrence = null,
     /// <summary>EventBased jobs only: the job whose completion triggers this one.</summary>
-    Guid? TriggerJobId = null);
+    Guid? TriggerJobId = null,
+    /// <summary>File reconciliation templates only: the uploaded files and the rules over them.</summary>
+    JobScheduler.Application.Reconciliation.ReconciliationSetupDto? Reconciliation = null);
 
 public sealed record JobFilter(
     JobStatus? Status,

@@ -57,6 +57,18 @@ public class TemplateSeeder(JobSchedulerDbContext db)
             IsApproved = true
         }, ct);
 
+        await AddIfMissingAsync(new JobTemplate
+        {
+            Name = "File Reconciliation",
+            Description = "Upload CSV files and define record-by-record rules over their columns (for example: "
+                          + "file1.Gross - file1.Fee must equal file2.Net). Every record gets a pass/fail result you can export.",
+            SupportedScheduleTypes = [ScheduleType.Manual, ScheduleType.Fixed, ScheduleType.Recurrent, ScheduleType.TriggerBased],
+            Fields = [Field("recipients", "Result recipient", FieldType.Email, true)],
+            DefaultRetryPolicy = new RetryPolicy { MaxAutoRetries = 1, BackoffSeconds = 30 },
+            IsApproved = true,
+            IsFileReconciliation = true
+        }, ct);
+
         // Deliberately unapproved, so the admin approval step can be demoed.
         await AddIfMissingAsync(new JobTemplate
         {

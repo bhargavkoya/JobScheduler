@@ -9,7 +9,11 @@ namespace JobScheduler.Infrastructure.Runs;
 /// <summary>PDF export of a job's run history (PRD 4.8). Times are shown in IST. QuestPDF Community license.</summary>
 public class PdfRunHistoryExporter : IRunHistoryExporter
 {
-    static PdfRunHistoryExporter() => QuestPDF.Settings.License = LicenseType.Community;
+    static PdfRunHistoryExporter()
+    {
+        QuestPDF.Settings.License = LicenseType.Community;
+        QuestPDF.Settings.ThrowOnMissingTextGlyphs = false;   // user-entered job names can hold any script
+    }
 
     public string Format => "pdf";
 

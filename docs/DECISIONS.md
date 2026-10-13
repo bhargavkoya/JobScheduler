@@ -38,3 +38,22 @@ Items 6, 7 and 8 above (PDF, notification preferences, webhook auth) were built 
 | 18 | Owner completion email | Added so `JobCompleted` has something to mute. Skipped when the job's result email already goes to the owner, to avoid two emails for one completion. |
 | 19 | PDF library | QuestPDF under its Community license (free for non-commercial and small-business use, not MIT) rather than a hand-rolled PDF writer; fine for a POC, revisit the license before any commercial use. |
 | 20 | Gmail verification | An admin-only `POST /admin/email/test` that mails only the calling admin's own address and bypasses the sent-email record, so it is repeatable and cannot be used to mail anyone else. |
+
+## Phase 8
+
+Built outside the PRD section 7 MVP slice, at the owner's request (the stub finance data could not demonstrate real reconciliation). Sample data: `docs/samples/`.
+
+| # | Question | Decision |
+|---|---|---|
+| 21 | Where reconciliation rules live | Per job, in `ReconciliationRules`, not in the global admin-only `CalculationRules`. Business users must define their own rules, and a rule refers to that job's file aliases and columns. The existing `IRule`/finance flow is untouched. |
+| 22 | Rule shape | A record-by-record check: join key in each file, a left and a right arithmetic expression, an operator and a tolerance. It covers "col1 - col3 of file 1 equals col2 of file 2". Aggregates, conditions and text/date comparison are not supported yet and would be new rule types. |
+| 23 | Expression language | A hand-written parser over `alias.Column` references, numbers and `+ - * /`. No Roslyn, scripting or SQL: rules are data and cannot execute code. Money uses `decimal`. |
+| 24 | Matching and unmatched records | Join on a chosen key (trimmed, case-insensitive). Unmatched records on either side, duplicate keys and blank keys are reported as failures with a reason, never silently dropped or picked arbitrarily. |
+| 25 | Bad data | A non-numeric or empty cell, or a divide-by-zero, fails only that record. A rule that no longer fits its file (for example a replaced file lost a column) fails the run loudly instead of producing a misleading result. |
+| 26 | File format and limits | CSV only (comma, semicolon, tab or pipe detected from the header), 5 MB and 50,000 rows per file, 5 files per job. Numbers accept thousands separators (`1,234.50`, `1,23,456.00`); currency symbols and `(12.00)` negatives are rejected. Excel is a possible follow-up. |
+| 27 | Storage | File bytes live in Postgres (`InputFileContents`, separate from the metadata table so listings never load them); behind `IReconciliationStore`, so object storage can replace it. Per-record results are rows, not JSON, so they can be paged, filtered and exported. |
+| 28 | Idempotency | The download step pins file ids and SHA-256 hashes; the calculate step reads exactly those and refuses a changed file. Results are replaced per run in one transaction. |
+| 29 | Replacing files | The old file is superseded, not deleted, and the alias is reused. The new file must still contain every column the rules use. There is deliberately no unique index on (job, alias): the replacement takes the alias in the same save that supersedes the old row, and Postgres checks uniqueness row by row; the services guarantee one active file per alias. |
+| 30 | Manual jobs | Unchanged: a Manual job runs once. Reconciling new files means a new job, or a Recurrent / Trigger-based job whose files are replaced between runs. Making Manual file jobs re-runnable is an open question. |
+| 31 | PDF robustness | PDF export no longer throws when text contains characters the font lacks (user-uploaded keys can hold any script); a placeholder glyph is drawn. The CSV keeps the exact text. Applied to the run-history PDF too. |
+| 32 | Web tests | The pure rule-builder logic is separate from React and tested with Node's built-in test runner (`npm test`), avoiding a new test framework for the POC. |

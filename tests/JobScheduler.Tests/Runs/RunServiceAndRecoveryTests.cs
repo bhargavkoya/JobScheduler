@@ -279,7 +279,7 @@ public class PipelineStepTests
         var engine = new Mock<ICalculationEngine>();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new CalculateStep(engine.Object).ExecuteAsync(Context(JobWith("{}")), default));
+            new CalculateStep(engine.Object, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationRunner>()).ExecuteAsync(Context(JobWith("{}")), default));
     }
 
     [Fact]
@@ -293,7 +293,7 @@ public class PipelineStepTests
         var ctx = Context(JobWith("""{"reportName":"P"}"""),
             prior: new() { [PipelineStep.DownloadReport] = JsonSerializer.Serialize(report) });
 
-        await new CalculateStep(engine.Object).ExecuteAsync(ctx, default);
+        await new CalculateStep(engine.Object, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationRunner>()).ExecuteAsync(ctx, default);
 
         engine.Verify(e => e.CalculateAsync(
             ctx.Job.Id,
@@ -309,7 +309,7 @@ public class PipelineStepTests
         finance.Setup(f => f.TriggerReportAsync("run-key:download", "Positions", It.IsAny<CancellationToken>())).ReturnsAsync("r9");
         finance.Setup(f => f.DownloadReportAsync("r9", It.IsAny<CancellationToken>())).ReturnsAsync(new ReportData("r9", []));
 
-        var output = await new DownloadReportStep(finance.Object)
+        var output = await new DownloadReportStep(finance.Object, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationRunner>())
             .ExecuteAsync(Context(JobWith("""{"reportName":"Positions"}""")), default);
 
         Assert.Contains("r9", output);
@@ -322,7 +322,7 @@ public class PipelineStepTests
         finance.Setup(f => f.TriggerReportAsync(It.IsAny<string>(), "Recon", It.IsAny<CancellationToken>())).ReturnsAsync("r1");
         finance.Setup(f => f.DownloadReportAsync("r1", It.IsAny<CancellationToken>())).ReturnsAsync(new ReportData("r1", []));
 
-        await new DownloadReportStep(finance.Object).ExecuteAsync(Context(JobWith("{}")), default);
+        await new DownloadReportStep(finance.Object, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationRunner>()).ExecuteAsync(Context(JobWith("{}")), default);
 
         finance.Verify(f => f.TriggerReportAsync(It.IsAny<string>(), "Recon", It.IsAny<CancellationToken>()), Times.Once);
     }

@@ -45,7 +45,7 @@ public class JobServiceTests
         _templates.Setup(t => t.FindAsync(_template.Id, It.IsAny<CancellationToken>())).ReturnsAsync(_template);
     }
 
-    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object, _users.Object, AtRiskPolicy.Default);
+    private JobService Sut() => new(_jobs.Object, _templates.Object, _me.Object, _clock.Object, _scheduler.Object, _users.Object, AtRiskPolicy.Default, Mock.Of<JobScheduler.Application.Reconciliation.IReconciliationSetupService>());
 
     private static Dictionary<string, string> GoodConfig() => new() { ["report"] = "Positions", ["email"] = "a@b.com" };
 

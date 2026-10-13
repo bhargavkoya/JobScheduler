@@ -2,7 +2,9 @@ using JobScheduler.Application.Approvals;
 using JobScheduler.Application.Calculation;
 using JobScheduler.Application.Jobs;
 using JobScheduler.Application.Notifications;
+using JobScheduler.Application.Reconciliation;
 using JobScheduler.Application.Runs;
+using JobScheduler.Infrastructure.Reconciliation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
@@ -68,6 +70,14 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<ICompletionNotifier, OwnerCompletionNotifier>();
         services.AddScoped<INotificationPreferenceStore, EfNotificationPreferenceStore>();
         services.AddScoped<INotificationPreferenceService, NotificationPreferenceService>();
+
+        services.AddScoped<IReconciliationStore, EfReconciliationStore>();
+        services.AddScoped<IInputFileService, InputFileService>();
+        services.AddScoped<IReconciliationSetupService, ReconciliationSetupService>();
+        services.AddScoped<IReconciliationRunner, ReconciliationRunner>();
+        services.AddSingleton<IReconciliationExporter, CsvReconciliationExporter>();
+        services.AddSingleton<IReconciliationExporter, PdfReconciliationExporter>();
+        services.AddScoped<IReconciliationResultsService, ReconciliationResultsService>();
 
         services.AddScoped<IApprovalStore, EfApprovalStore>();
         services.AddScoped<IApprovalService, ApprovalService>();

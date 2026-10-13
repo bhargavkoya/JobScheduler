@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Text.Json;
 using JobScheduler.Application.Auth;
 using JobScheduler.Application.Common;
+using JobScheduler.Application.Reconciliation;
 using JobScheduler.Application.Runs;
 using JobScheduler.Domain.Jobs;
 using JobScheduler.Domain.Users;
@@ -19,7 +20,7 @@ public interface IJobService
 
 public class JobService(
     IJobStore jobs, ITemplateStore templates, ICurrentUser me, TimeProvider clock, IJobScheduler scheduler,
-    IUserStore users, AtRiskPolicy atRisk) : IJobService
+    IUserStore users, AtRiskPolicy atRisk, IReconciliationSetupService reconciliation) : IJobService
 {
     /// <summary>Schedule types that can actually be created in this phase.</summary>
     public static readonly IReadOnlySet<ScheduleType> CreatableScheduleTypes =
@@ -96,6 +97,13 @@ public class JobService(
             CreatedAtUtc = clock.GetUtcNow().UtcDateTime,
             StatusChangedAtUtc = clock.GetUtcNow().UtcDateTime
         };
+
+        // File reconciliation jobs carry their uploaded files and rules. They are validated and attached before the
+        // single save below, so an invalid setup never leaves a half-created job behind.
+        if (template.IsFileReconciliation)
+            await reconciliation.AttachAsync(job, request.Reconciliation, ct);
+        else if (request.Reconciliation is not null)
+            throw new ValidationException($"Template '{template.Name}' does not take uploaded files or reconciliation rules.");
 
         await jobs.AddAsync(job, ct);
         await jobs.SaveChangesAsync(ct);

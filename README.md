@@ -8,6 +8,7 @@ This is a base-level interview POC, not a production system.
 
 - [`docs/PRD.md`](docs/PRD.md) — product requirements
 - [`docs/DEMO.md`](docs/DEMO.md) — 5-minute demo script
+- [`docs/TESTING.md`](docs/TESTING.md) — manual testing guide: accounts, every template and schedule type, expected results, troubleshooting
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current-state architecture, updated every phase
 - [`docs/PLAN.md`](docs/PLAN.md) — phased build checklist, updated every phase
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisions log, appended every phase
@@ -47,6 +48,14 @@ cd web && npm install && npm run dev
 ```
 
 Frontend dev server: http://localhost:5173 — backend API: http://localhost:5031.
+
+In Development the API also applies migrations and seeds demo data every time it starts (so step 3 is optional). Demo logins, all with password `Passw0rd!`: `business@jobscheduler.local`, `tech@jobscheduler.local`, `admin@jobscheduler.local` (what each can do: [`docs/TESTING.md`](docs/TESTING.md#2-accounts)).
+
+If no `Jwt:Key` is configured, Development generates a random signing key on every start, so each API restart logs everyone out. To keep sessions across restarts set one (32+ characters; it is required outside Development):
+
+```bash
+dotnet user-secrets set "Jwt:Key" "<at least 32 random characters>" --project src/JobScheduler.Api
+```
 
 ## Email (Gmail) and calculation rules
 
@@ -89,7 +98,7 @@ curl -X POST http://localhost:5031/webhooks/jobs/<job-id> \
 ```
 
 - **Notification preferences** (Notifications tab, `GET`/`PUT /me/notification-preferences`): each user can switch off `JobCompleted`, `JobFailed`, `ApprovalRequested` and `FollowUpReminder` emails. Everything is on by default. A muted email is skipped and not recorded as sent. Addresses that are not registered users (a free-text recipient on a job) cannot have preferences and always get mail.
-- **Check Gmail really works**: set the two secrets above, restart, log in as an admin and call `POST /admin/email/test` (Swagger works). It sends one message to the admin's own address and returns 409 if Gmail is not configured or 502 with Gmail's error if it rejects the login.
+- **Check Gmail really works**: set the two secrets above, restart, log in as an admin and call `POST /admin/email/test` (Swagger has no Authorize button, so use the PowerShell helper in [`docs/TESTING.md`](docs/TESTING.md#powershell-helper-for-api-calls)). It sends one message to the admin's own address and returns 409 if Gmail is not configured or 502 with Gmail's error if it rejects the login.
 
 ## File reconciliation (upload your own files)
 

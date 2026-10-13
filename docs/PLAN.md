@@ -29,9 +29,40 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 - Sample data and expected results: [`samples/README.md`](samples/README.md). The tests run the documented rules over those files and assert the README's lists, so the two cannot drift.
 - Verification: unit tests (xUnit + Moq), opt-in Postgres tests (`JOBSCHEDULER_TEST_PG`), web logic tests (`npm test`), a scripted HTTP walkthrough and a scripted Chrome walkthrough, both against a throwaway database.
 
+## PRD coverage
+
+Checked against the code on 2026-10-13. **Done** = built and exercised; **Partial** = built with a gap that is named; **Not built** = absent. Section numbers refer to [`PRD.md`](PRD.md).
+
+| PRD item | Status | Notes |
+|---|---|---|
+| §3 Auto-triggered notifications | Partial | Job completed, job failed, approval requested and approval reminder are sent. "Report ready" is covered by the webhook trigger starting a job, not by a separate notification. |
+| §3 Trigger and download reports (REST) | Done | `IFinanceAppClient` over HTTP; the finance app is a stub in the POC. |
+| §3 / §4.5 Configurable calculation rules | Done | Finance rules are data and pluggable (`IRule`); file reconciliation rules are data per job. |
+| §3 / §4.6 Result e-mails (Gmail) | Done | Real MailKit path; delivery not yet verified with a real account (see below). |
+| §3 / §4.6 Follow-up e-mails, "remind again in 24h" | Partial | The approval reminder works (`followUpAfterMinutes`, one e-mail). The Follow-up Chaser template's message and "remind again" fields are saved but unused. |
+| §4.1 Auth, teams, claims | Done | E-mail and password, JWT, roles, primary and observer teams, permission claims. SSO (stretch) not built. |
+| §4.2 Dashboard: list, filters, detail | Done | Status, team, type, date range, owner ("My jobs"), at-risk. Detail shows definition, schedule, run history, step output, retry count, state, owner and team. |
+| §4.2 "Linked reports / e-mails" in job detail | Partial | Step output is shown; sent e-mails are recorded in `SentEmails` but not shown in the UI. |
+| §4.2 Distinct action buttons by state | Partial | Run now, Approve, Reject, Retry and Cancel appear only when valid. A "Provide input" action is not built. |
+| §4.2 Manual action queue view | Done | Separate tab with a count badge. |
+| §4.3 Five schedule types, template catalog, IST | Done | Fixed, Recurrent, Event-based (job chaining), Trigger-based (webhook), Manual; admin-approved templates; IST only. |
+| §4.4 Failure handling | Partial | Failed jobs are flagged and the owner is e-mailed; auto-retry with backoff, manual Retry, failed step and error shown. The team is not notified, only the owner. |
+| §4.7 Single approver | Done | |
+| §4.8 CSV / PDF export of run history | Done | Plus record-level exports for file reconciliation. |
+| §5 Reliability: scheduled jobs must not silently drop | Partial | Fixed jobs survive a restart (a past time fires at once). A Recurrent firing missed while the API is down is **not** replayed or reported. |
+| §5 At-risk flagging | Partial | Late Fixed jobs, runs and approvals taking too long. Not a missed Recurrent firing. |
+| §5 Auditability | Partial | Each run keeps who triggered it, every step's output and attempt, and approvals are recorded. Sent e-mails are stored but not visible in the UI. |
+| §5 Extensibility by configuration | Done | New rules, templates (admin API) and per-job reconciliation rules need no code change. |
+| §5 Idempotency | Done | See `ARCHITECTURE.md` section 7. |
+| §5 Multi-tenancy by team and claims | Done (basic) | Team scoping and observer teams; no separate tenants. |
+| §2 Technical team sees job internals | Not built | Not differentiated: anyone who can see a job sees its run history, retry settings and errors. |
+
 ## Still open
 
 - Live-verify Gmail delivery with a real app password (use `POST /admin/email/test`).
 - A manual run-through against your own Postgres of the Phase 7 and Phase 8 migrations (Phase 8 was verified against a throwaway database; migrations apply automatically when the API starts in Development).
+- Recurrent firings missed while the API is down are skipped and invisible (see PRD coverage). Options: record a "missed" run when start-up finds one, or persist Quartz.
+- Follow-up Chaser template: its **Message** and **Remind again after (hours)** fields are saved but not used (the assignee gets the generic "completed" email). Decide whether to wire them in (message in the email body, one re-send after N hours if nothing has happened).
+- Swagger has no bearer-token setup, so protected endpoints cannot be called from it; adding a security definition would fix that.
 - File reconciliation limits to decide on later: text/date comparisons, aggregate rules, Excel input, re-running a Manual job after replacing its files.
 - Out of scope by design: business-day calendars, SSO, multi-approver sign-off, retention policy.

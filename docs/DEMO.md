@@ -1,6 +1,8 @@
 # 5-minute demo script
 
-Logins (password `Passw0rd!`): `business@jobscheduler.local` (Business employee, can approve), `tech@jobscheduler.local`, `admin@jobscheduler.local`.
+More scenarios (every template, schedule type, troubleshooting): [`TESTING.md`](TESTING.md).
+
+Logins (password `Passw0rd!`): `business@jobscheduler.local` (Business employee, can approve), `tech@jobscheduler.local` (Technical, can retry, observes Business), `admin@jobscheduler.local` (all permissions).
 
 Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd web && npm run dev`. The Development start-up migrates and seeds users, templates, rules and a demo chain. Gmail is optional: without credentials emails are logged instead of sent.
 
@@ -12,8 +14,8 @@ Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd 
 
 ## 2. Idempotency and retries (about 1 min)
 
-- Click **Run now** twice quickly: the `Idempotency-Key` makes the second click return the same run.
-- Create a job from a template with rule "Variance vs Ledger" to see a calculation outcome change; failures auto-retry with exponential backoff, then **Retry** resumes after the last good step (nothing re-sent).
+- Idempotency: the **Run now** button sends a fresh key on every click and is disabled while a run starts, so a double click cannot show it. Call the API twice with the same `Idempotency-Key` header instead and the second call returns the same run (PowerShell snippet in [`TESTING.md`](TESTING.md#9-schedule-types)).
+- Create a job from a template with rule "Variance vs Ledger" to see a calculation outcome change; failures auto-retry with exponential backoff, then **Retry** (log in as `tech@` or `admin@`: `business@` has no retry permission) resumes after the last good step (nothing re-sent).
 
 ## 3. Scheduling (about 1 min)
 
@@ -32,7 +34,7 @@ Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd 
 ## 6. Webhook trigger and notification preferences (optional, about 1 min)
 
 - New job -> template **Daily Reconciliation Report** -> **Trigger-based (webhook)**. Copy the token shown once, then run the `curl` it prints. Run it again with the same `Idempotency-Key`: one run only. Talking point: only a hash of the token is stored; a wrong token is a 401 that looks the same as an unknown job.
-- **Notifications** tab: switch off "Job completed", save, run a job and show the log line "notifications are switched off" instead of an email.
+- **Notifications** tab: switch off "Job completed", save, run a job and show the log line "Email to ... skipped: ... notifications are switched off" instead of an email.
 
 ## 7. File reconciliation with your own files (about 3 minutes)
 

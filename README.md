@@ -49,6 +49,14 @@ cd web && npm install && npm run dev
 
 Frontend dev server: http://localhost:5173 — backend API: http://localhost:5031.
 
+In Development the API also applies migrations and seeds demo data every time it starts (so step 3 is optional). Demo logins, all with password `Passw0rd!`: `business@jobscheduler.local`, `tech@jobscheduler.local`, `admin@jobscheduler.local` (what each can do: [`docs/TESTING.md`](docs/TESTING.md#2-accounts)).
+
+If no `Jwt:Key` is configured, Development generates a random signing key on every start, so each API restart logs everyone out. To keep sessions across restarts set one (32+ characters; it is required outside Development):
+
+```bash
+dotnet user-secrets set "Jwt:Key" "<at least 32 random characters>" --project src/JobScheduler.Api
+```
+
 ## Email (Gmail) and calculation rules
 
 Email is sent through Gmail SMTP with MailKit. Without credentials the app still runs and just logs "STUB EMAIL" lines instead of sending.

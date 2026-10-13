@@ -22,9 +22,11 @@ All seeded accounts use the password **`Passw0rd!`** (capital P, a zero, exclama
 
 | Email | Role / team | Use it for |
 |---|---|---|
-| `business@jobscheduler.local` | Employee, Business | Main tester. Can approve and retry, sees other teams' jobs. |
-| `tech@jobscheduler.local` | Employee, Technical | Observes the Business team (can read its jobs). Can retry; cannot approve; cannot change a job it does not own. |
-| `admin@jobscheduler.local` | Admin | Approves catalog templates, manages rules and users, can decide any approval. |
+| `business@jobscheduler.local` | Employee, Business | Main tester: creates and runs jobs, and holds the `jobs.approve` permission. **Cannot retry** a failed job and sees only Business jobs. |
+| `tech@jobscheduler.local` | Employee, Technical | Holds `jobs.retry` and observes the Business team (can read its jobs). Cannot approve; cannot change a job it does not own. Use it for **Retry**. |
+| `admin@jobscheduler.local` | Admin | Holds every permission: retry, approve, view all teams. Also approves catalog templates and manages rules and users. |
+
+So **Retry** (a Failed job) is done as `tech@` or `admin@`, not `business@`: the button is not shown to a user without `jobs.retry`.
 
 To get a user who truly cannot see Business jobs: register one on the login page (password 8+ characters), then as admin move them to Technical with no observer access (see the PowerShell helper below, `PUT /admin/users/{id}/team` with `{ "primaryTeam": "Technical", "role": "Employee", "observerTeams": [] }`).
 
@@ -85,7 +87,7 @@ Seeded rules (data, editable by an admin):
 | 5.2 A rule fails | Same, with rules `Total Position, Variance vs Ledger`. | Still Completed (a failing rule is a result, not an error). Calculate output shows `FAIL Variance vs Ledger`. |
 | 5.3 Unknown rule | Rules `Nope`. Run now. | Calculate step fails ("Calculation rule 'Nope' does not exist or is inactive."), auto-retries, then the job is Failed. Fix by creating a new job with a valid rule name. |
 | 5.4 Rules are data | As admin, change Exposure Cap's max (snippet below), then create a new Manual job with rules `Exposure Cap` and run it. | Now fails (1048.75 is above 1000). **Restore max to 5000 afterwards.** |
-| 5.5 Retries and resume | Stop the API. Set `FinanceStub__FailFirstAttempts=2` (PowerShell: `$env:FinanceStub__FailFirstAttempts = '2'`), start it again. Create a job with **Auto retries 1** and **Backoff 5**, run it. | Attempt 1 fails at Download report (finance app returns 503), one auto-retry after 5 s also fails, the run and job become **Failed** with the 503 message. Click **Retry**: the third call succeeds, the run resumes and completes, and the email is sent **once**. Unset the variable afterwards. |
+| 5.5 Retries and resume | Stop the API. Set `FinanceStub__FailFirstAttempts=2` (PowerShell: `$env:FinanceStub__FailFirstAttempts = '2'`), start it again. Create a job with **Auto retries 1** and **Backoff 5**, run it. | Attempt 1 fails at Download report (finance app returns 503), one auto-retry after 5 s also fails, the run and job become **Failed** with the 503 message. Log in as **`tech@` or `admin@`** (business has no retry permission) and click **Retry**: the third call succeeds, the run resumes and completes, and the email is sent **once**. Unset the variable afterwards. |
 
 Snippet for 5.4:
 
@@ -168,7 +170,7 @@ Single-approver, manual-action flow. Manual kickoff only. Fields: Portfolio, App
 |---|---|---|
 | 7.1 Approve | As business: new job (Portfolio "Growth Fund", **Approver email `business@jobscheduler.local`**, Amount 250000). Run now. Open **Manual actions**. **Approve**. | After the run the job is **Needs manual action** (not Completed) and listed in the queue (the tab shows a count badge). Console: `STUB EMAIL ... Approval needed`. Approving completes the job. |
 | 7.2 Decide only once | After approving, try to decide again (for example via the API, `POST /jobs/{id}/approve`). | Refused with 409. |
-| 7.3 Reject and retry | New job, run, **Reject** with a comment (a comment is required). | The job becomes **Failed**. **Retry** re-runs it and it waits for approval again. |
+| 7.3 Reject and retry | New job, run, **Reject** with a comment (a comment is required). Then log in as `tech@` or `admin@` and click **Retry**. | The job becomes **Failed**. **Retry** re-runs it (same run, nothing re-sent that already succeeded) and it waits for approval again. |
 | 7.4 Reminder | New job with the reminder set to `1`, run, do nothing for a minute. | One reminder email to the approver ("is still waiting for your approval"), once. If you decide before the minute is up, none is sent. |
 | 7.5 Approver must be allowed | Approver email `tech@jobscheduler.local`. | Creation refused: "does not have permission to approve jobs". An unknown email is refused too ("not a registered user"). |
 | 7.6 Who can decide | Log in as `tech@` and open the Manual actions queue. | If the job is listed for you, its Approve and Reject buttons are disabled. Only the named approver or an admin can decide. |
@@ -193,8 +195,8 @@ Emails an assignee when the job runs. Fields: Assignee email, Message, "Remind a
 | Type | How to test | Expect |
 |---|---|---|
 | **Manual** | Create, then Run now. | One run. Afterwards the job is Completed and cannot be run again. |
-| **Fixed** | Run at (IST) 1 to 2 minutes ahead. | Fires once, by itself, with the API running. A time in the past is refused. |
-| **Recurrent** | Daily / Weekly / Monthly (day 1 to 28) at a time. | Fires at the **next** occurrence of that time, never immediately: "Daily at 18:08" created at 18:08:16 first fires tomorrow. For a quick test choose a time 2 to 3 minutes ahead. It skips a firing while the previous run is running, waiting on approval or Failed. Cancel stops it. |
+| **Fixed** | Run at (IST) 1 to 2 minutes ahead. | Fires once, by itself. A time in the past is refused when creating. If the API was down at the due time, it fires immediately on the next start-up. |
+| **Recurrent** | Daily / Weekly / Monthly (day 1 to 28) at a time. | Fires at the **next** occurrence of that time, never immediately: "Daily at 18:08" created at 18:08:16 first fires tomorrow. For a quick test choose a time 2 to 3 minutes ahead. It skips a firing while the previous run is running, waiting on approval or Failed. A firing missed while the API is down is not replayed. Cancel stops it. |
 | **Event-based** | Pick another job that starts it. | Starts once per upstream run, when that run completes (after approval for approval jobs). |
 | **Trigger-based (webhook)** | Create the job and **copy the token shown once**. Call the webhook (below). | 202 and a run. The request body appears on the run. Wrong token, unknown job or non-webhook job all return the same 401. |
 
@@ -250,13 +252,14 @@ Remove-Item Env:JOBSCHEDULER_TEST_PG
 | Browser console: `ERR_INTERNET_DISCONNECTED` | The browser thinks it is offline. In DevTools, Network tab, set throttling to "No throttling" (not "Offline"), then Ctrl+Shift+R. |
 | `ERR_CONNECTION_REFUSED` | The API is not running on port 5031. Start it. |
 | Login fails | Password is `Passw0rd!` (zero, not the letter O). The API must be running, and demo users are created when it starts in Development. |
-| A Recurrent job "isn't running" | It fires at the next occurrence of its time (IST), not at creation. The API must be running at that moment. |
+| A Recurrent job "isn't running" | It fires at the next occurrence of its time (IST), not at creation. The API must be running at that moment: a firing that happens while the API is down is **skipped, not replayed** (the scheduler is in memory and is rebuilt from "now" on start-up). |
 | No **Run now** button | Only Manual jobs in Scheduled status have it. A Completed Manual job cannot be re-run ("only jobs that are ready (Scheduled) can be run"). |
 | Page shows new fields missing or 500s after pulling code | Restart the API so it applies migrations. |
 | Swagger returns 401 | Swagger has no Authorize button. Use the PowerShell helper. |
 | No emails | Expected without Gmail credentials: look for `STUB EMAIL` lines in the API console. |
 | Port in use | API 5031, web 5173 (the API only allows CORS from 5173), Postgres 5433. |
-| Scheduled job did not start after an API restart | Fixed and recurrent triggers are rebuilt from the database on start-up, so give it a few seconds and check the console for errors. |
+| Scheduled job did not start after an API restart | Triggers are rebuilt from the database on start-up, so give it a few seconds and check the console for the `Startup recovery: N job(s) rescheduled` line. A **Fixed** job whose time passed while the API was down fires immediately on start-up; a **Recurrent** firing missed while down is skipped. |
+| Logged out after restarting the API | With no `Jwt:Key` configured, Development generates a random signing key on every start, so old tokens stop working. Log in again, or set `Jwt:Key` (32+ characters) as a user-secret. |
 
 ## 13. Known gaps
 

@@ -33,5 +33,7 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 
 - Live-verify Gmail delivery with a real app password (use `POST /admin/email/test`).
 - A manual run-through against your own Postgres of the Phase 7 and Phase 8 migrations (Phase 8 was verified against a throwaway database; migrations apply automatically when the API starts in Development).
+- Follow-up Chaser template: its **Message** and **Remind again after (hours)** fields are saved but not used (the assignee gets the generic "completed" email). Decide whether to wire them in (message in the email body, one re-send after N hours if nothing has happened).
+- Swagger has no bearer-token setup, so protected endpoints cannot be called from it; adding a security definition would fix that.
 - File reconciliation limits to decide on later: text/date comparisons, aggregate rules, Excel input, re-running a Manual job after replacing its files.
 - Out of scope by design: business-day calendars, SSO, multi-approver sign-off, retention policy.

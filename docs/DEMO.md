@@ -1,5 +1,7 @@
 # 5-minute demo script
 
+More scenarios (every template, schedule type, troubleshooting): [`TESTING.md`](TESTING.md).
+
 Logins (password `Passw0rd!`): `business@jobscheduler.local` (Business employee, can approve), `tech@jobscheduler.local`, `admin@jobscheduler.local`.
 
 Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd web && npm run dev`. The Development start-up migrates and seeds users, templates, rules and a demo chain. Gmail is optional: without credentials emails are logged instead of sent.
@@ -12,7 +14,7 @@ Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd 
 
 ## 2. Idempotency and retries (about 1 min)
 
-- Click **Run now** twice quickly: the `Idempotency-Key` makes the second click return the same run.
+- Idempotency: the **Run now** button sends a fresh key on every click and is disabled while a run starts, so a double click cannot show it. Call the API twice with the same `Idempotency-Key` header instead and the second call returns the same run (PowerShell snippet in [`TESTING.md`](TESTING.md#9-schedule-types)).
 - Create a job from a template with rule "Variance vs Ledger" to see a calculation outcome change; failures auto-retry with exponential backoff, then **Retry** resumes after the last good step (nothing re-sent).
 
 ## 3. Scheduling (about 1 min)

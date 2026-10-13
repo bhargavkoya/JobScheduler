@@ -11,6 +11,8 @@ import {
   type Template,
 } from '../api'
 import { useAuth } from '../auth/AuthContext'
+import { ReconciliationSetup } from './ReconciliationSetup'
+import { buildSetup, setupProblem, type DraftFile, type RuleDraft } from './reconciliation'
 
 export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
   const { token } = useAuth()
@@ -28,6 +30,8 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState<Job | null>(null)
+  const [files, setFiles] = useState<DraftFile[]>([])
+  const [rules, setRules] = useState<RuleDraft[]>([])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -58,6 +62,8 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   function selectTemplate(t: Template) {
     setTemplateId(t.id)
     setConfig({})
+    setFiles([])
+    setRules([])
     const first = t.supportedScheduleTypes.find((s) => CREATABLE_SCHEDULE_TYPES.includes(s))
     if (first) setScheduleType(first)
   }
@@ -90,6 +96,7 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
             }
           : {}),
         ...(scheduleType === 'EventBased' ? { triggerJobId } : {}),
+        ...(template?.isFileReconciliation ? { reconciliation: buildSetup(files, rules) } : {}),
         ...(scheduleType === 'Fixed' ? { runAtIst: runAtIst.length === 16 ? `${runAtIst}:00` : runAtIst } : {}),
       }
       const job = await apiFetch<Job>('/jobs', { method: 'POST', body: JSON.stringify(payload) }, token)
@@ -128,6 +135,7 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
   }
 
   const input = 'mt-1 w-full rounded border border-slate-300 px-3 py-2 text-slate-900'
+  const setupIssue = template?.isFileReconciliation ? setupProblem(files, rules) : null
 
   return (
     <form onSubmit={onSubmit} className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -247,6 +255,26 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
         </label>
       ))}
 
+      {template?.isFileReconciliation && (
+        <>
+          <ReconciliationSetup
+            files={files}
+            rules={rules}
+            onChange={(f, r) => {
+              setFiles(f)
+              setRules(r)
+            }}
+          />
+          {scheduleType === 'Manual' && (
+            <p className="rounded bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              A manual job runs once. To reconcile new files later, create another job, or choose Recurrent or Trigger-based (webhook) and
+              replace the files between runs.
+            </p>
+          )}
+          {setupIssue && files.length > 0 && <p className="text-xs text-amber-800">Not ready yet: {setupIssue}.</p>}
+        </>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <label className="block text-sm text-slate-600">
           Auto retries (blank = template default{template ? `: ${template.defaultRetryPolicy.maxAutoRetries}` : ''})
@@ -263,7 +291,7 @@ export function CreateJobForm({ onCreated, onCancel }: { onCreated: () => void; 
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={busy || !template}
+          disabled={busy || !template || setupIssue !== null}
           className="rounded bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
         >
           {busy ? 'Creating...' : 'Create job'}

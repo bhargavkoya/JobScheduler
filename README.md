@@ -91,6 +91,18 @@ curl -X POST http://localhost:5031/webhooks/jobs/<job-id> \
 - **Notification preferences** (Notifications tab, `GET`/`PUT /me/notification-preferences`): each user can switch off `JobCompleted`, `JobFailed`, `ApprovalRequested` and `FollowUpReminder` emails. Everything is on by default. A muted email is skipped and not recorded as sent. Addresses that are not registered users (a free-text recipient on a job) cannot have preferences and always get mail.
 - **Check Gmail really works**: set the two secrets above, restart, log in as an admin and call `POST /admin/email/test` (Swagger works). It sends one message to the admin's own address and returns 409 if Gmail is not configured or 502 with Gmail's error if it rejects the login.
 
+## File reconciliation (upload your own files)
+
+Create a job from the **File Reconciliation** template to compare CSV files record by record. Nothing about the files is hardcoded: columns come from each file's header row.
+
+1. **Upload** one or more CSV files (first row = column names; up to 5 MB and 50,000 rows each). Each gets a short name used in rules (editable), for example `trades`.
+2. **Define rules**. A rule picks a left and a right file, a key column in each to match records on, and a comparison of two expressions over columns, for example `trades.GrossCashAmount - trades.Commission - trades.Tax` **equals** `custodian.CashAmount` with an optional tolerance (amount or %). Use `file.[Column Name]` when a column name has spaces. Choosing the same file on both sides compares columns of each row.
+3. **Run it** (Manual, Fixed, Recurrent or webhook). Every record gets Pass or Fail with the numbers, the difference and a reason; records missing from either file and duplicate keys fail with a reason.
+4. **See and export** the results on the job: totals per rule, Failed-only and per-rule filters, paging, and **Export CSV / PDF** of exactly the filtered view.
+5. **Replace a file** (owner or admin) with a newer extract; it keeps its name, the old file is kept for audit, and the next run of a Recurrent or webhook job uses it. A Manual job runs once.
+
+Try it with the three files in [`docs/samples`](docs/samples/README.md): they contain planted mismatches, and the README lists the exact expected results. API: `POST /job-files`, `GET /jobs/{id}/reconciliation`, `GET /runs/{id}/reconciliation/summary|results|export` (see Swagger).
+
 ## Commands
 
 - `docker compose up -d` — start Postgres
@@ -98,6 +110,8 @@ curl -X POST http://localhost:5031/webhooks/jobs/<job-id> \
 - `dotnet run --project src/JobScheduler.Api` — run the API
 - `dotnet test` — run the test suite
 - `cd web && npm run dev` — run the frontend dev server
+- `cd web && npm test` — web logic tests (rule builder); `npm run build` type-checks and builds
+- Database tests are opt-in: set `JOBSCHEDULER_TEST_PG` to a Postgres connection string and run `dotnet test`; they create and drop a throwaway database
 
 ## Notes
 

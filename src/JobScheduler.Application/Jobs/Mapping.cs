@@ -43,5 +43,6 @@ internal static class Mapping
         atRiskReason is not null,
         atRiskReason,
         j.RecurrenceText,
-        j.TriggerJobId);
+        j.TriggerJobId,
+        IsFileReconciliation: j.Template?.IsFileReconciliation ?? false);
 }

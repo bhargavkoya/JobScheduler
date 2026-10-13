@@ -71,4 +71,6 @@ public sealed record JobDto(
     string? RecurrenceText = null,
     Guid? TriggerJobId = null,
     /// <summary>TriggerBased jobs: the webhook secret. Returned only by the create call; only its hash is stored.</summary>
-    string? WebhookToken = null);
+    string? WebhookToken = null,
+    /// <summary>The job compares uploaded CSV files record by record; its runs have reconciliation results.</summary>
+    bool IsFileReconciliation = false);

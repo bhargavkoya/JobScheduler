@@ -13,6 +13,8 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 | 6 | Recurrent schedules (IST cron), event-chained jobs, CSV export of run history, demo seed chain, `DEMO.md` | Completing one job starts its dependent; a daily job fires by itself | **Done** (PR #6) |
 | 7 | Trigger-based (webhook) jobs, per-user notification preferences with an owner completion email, PDF export, Gmail test endpoint, docs refresh | `curl` a webhook to fire a job twice with the same key and get one run; mute an event and see the email skipped; download a PDF | **Done** — see note below |
 
+| 8 | File reconciliation (requested after Phase 7): upload CSVs, per-job record-by-record rules over their columns, per-record pass/fail results, CSV/PDF export, replace-file, web UI | Upload the sample files, define rules, run, see every record's result and export it; a different set of files with different columns works the same way | **Done** - see note below |
+
 ## Phase 7 note
 
 - **Webhook trigger**: `POST /webhooks/jobs/{id}` with `X-Webhook-Token`. The token is returned once at create time and only its SHA-256 is stored. Without an `Idempotency-Key` header every call is a new run; with one, a replay returns the same run.
@@ -20,8 +22,16 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 - **PDF export**: `?format=pdf` on the existing export endpoint, using QuestPDF under its Community license.
 - Tests were added after the code (`tests/JobScheduler.Tests/Runs/Phase7Tests.cs`): webhook token and trigger service, triggered-run orchestration, preference enforcement and service, event tagging, owner completion notice, CSV/PDF exporters and the export service. The suite is 312 tests.
 
+## Phase 8 note
+
+- Backend: `CsvTable`, `Expression`, `RuleEvaluator`, `ReconciliationSetupService`, `ReconciliationRunner` (wired into the existing download and calculate steps), EF migration `Phase8FileReconciliation`, API (`/job-files`, `/jobs/{id}/reconciliation`, `/runs/{id}/reconciliation/*`).
+- Frontend: upload, rule builder, results view, files-and-rules panel.
+- Sample data and expected results: [`samples/README.md`](samples/README.md). The tests run the documented rules over those files and assert the README's lists, so the two cannot drift.
+- Verification: unit tests (xUnit + Moq), opt-in Postgres tests (`JOBSCHEDULER_TEST_PG`), web logic tests (`npm test`), a scripted HTTP walkthrough and a scripted Chrome walkthrough, both against a throwaway database.
+
 ## Still open
 
 - Live-verify Gmail delivery with a real app password (use `POST /admin/email/test`).
-- A manual run-through against Postgres (the tests mock the database, so the two new migrations are untested).
+- A manual run-through against your own Postgres of the Phase 7 and Phase 8 migrations (Phase 8 was verified against a throwaway database; migrations apply automatically when the API starts in Development).
+- File reconciliation limits to decide on later: text/date comparisons, aggregate rules, Excel input, re-running a Manual job after replacing its files.
 - Out of scope by design: business-day calendars, SSO, multi-approver sign-off, retention policy.

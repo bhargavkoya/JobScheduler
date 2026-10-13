@@ -3,6 +3,7 @@ import { apiFetch, downloadFile, webhookUrl, type Job, type JobStatus, type Sche
 import { useAuth } from '../auth/AuthContext'
 import { CreateJobForm } from './CreateJobForm'
 import { ApprovalHistory } from './ApprovalHistory'
+import { ReconciliationSetupView } from './ReconciliationSetupView'
 import { RunHistory } from './RunHistory'
 import { AtRiskBadge, StatusBadge } from './StatusBadge'
 import { STATUS_LABELS } from './statusLabels'
@@ -250,7 +251,7 @@ export function JobsPage() {
                 }
                 className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
               >
-                Export CSV
+                {selected.isFileReconciliation ? 'Run history CSV' : 'Export CSV'}
               </button>
               <button
                 disabled={busy}
@@ -261,7 +262,7 @@ export function JobsPage() {
                 }
                 className="rounded border border-slate-300 px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
               >
-                Export PDF
+                {selected.isFileReconciliation ? 'Run history PDF' : 'Export PDF'}
               </button>
               {selected.canCancel && (
                 <button
@@ -303,9 +304,26 @@ export function JobsPage() {
               <ApprovalHistory jobId={selected.id} status={selected.status} refreshKey={runsRefresh} />
             </div>
           )}
+          {selected.isFileReconciliation && (
+            <div>
+              <h4 className="mb-2 font-medium text-slate-800">Files and rules</h4>
+              <ReconciliationSetupView
+                jobId={selected.id}
+                canReplace={user?.role === 'Admin' || user?.id === selected.ownerId}
+                running={selected.status === 'InProgress'}
+                onChanged={() => setRunsRefresh((n) => n + 1)}
+              />
+            </div>
+          )}
           <div>
             <h4 className="mb-2 font-medium text-slate-800">Run history</h4>
-            <RunHistory jobId={selected.id} status={selected.status} refreshKey={runsRefresh} />
+            <RunHistory
+              jobId={selected.id}
+              jobName={selected.name}
+              status={selected.status}
+              refreshKey={runsRefresh}
+              fileRecon={selected.isFileReconciliation}
+            />
           </div>
         </section>
       )}

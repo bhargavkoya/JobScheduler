@@ -33,3 +33,15 @@ Setup: `docker compose up -d`, `dotnet run --project src/JobScheduler.Api`, `cd 
 
 - New job -> template **Daily Reconciliation Report** -> **Trigger-based (webhook)**. Copy the token shown once, then run the `curl` it prints. Run it again with the same `Idempotency-Key`: one run only. Talking point: only a hash of the token is stored; a wrong token is a 401 that looks the same as an unknown job.
 - **Notifications** tab: switch off "Job completed", save, run a job and show the log line "notifications are switched off" instead of an email.
+
+## 7. File reconciliation with your own files (about 3 minutes)
+
+Talking point: nothing is hardcoded. Columns come from whatever CSVs are uploaded, rules are data, and the result is per record.
+
+1. New job -> template **File Reconciliation** -> Manual kickoff, recipient = you.
+2. **Choose CSV files**: select the three files in `docs/samples`. The columns appear straight away; click Preview. Rename the files to `trades`, `custodian`, `ledger` (any expressions follow the rename).
+3. Rule 1: left `trades`, right `custodian`, match `TradeId` = `ClientTradeRef`, `trades.GrossCashAmount - trades.Commission - trades.Tax` equals `custodian.CashAmount`. Mistype a column to show the instant error listing the real columns.
+4. Add rule 2: left `custodian`, right `ledger`, match `ClientTradeRef` = `TradeId`, `custodian.CashAmount` equals `ledger.DebitAmount - ledger.CreditAmount` with tolerance 0.05. Create the job and **Run now**.
+5. Expected: rule 1 52 of 62 pass, rule 2 48 of 63 pass (the full list is in `docs/samples/README.md`). Click **Failed only**, then a rule, to see the reasons: a 1,200.00 difference, a record missing from the custodian, a ledger entry posted twice.
+6. **Export CSV** / **Export PDF** from the results: they contain exactly the filtered records (try with and without the filter).
+7. For repeat runs: create the job as Trigger-based (webhook), then **Replace file** on the ledger and fire the webhook again; each run keeps its own results.

@@ -43,6 +43,8 @@ export interface Template {
   defaultRetryPolicy: RetryPolicy
   isApproved: boolean
   requiresApproval: boolean
+  /** Jobs of this template compare uploaded CSV files record by record. */
+  isFileReconciliation: boolean
 }
 
 export interface Job {
@@ -69,6 +71,8 @@ export interface Job {
   triggerJobId: string | null
   /** TriggerBased jobs: only present on the create response; shown once. */
   webhookToken?: string | null
+  /** The job compares uploaded CSV files; its runs have record-level results. */
+  isFileReconciliation: boolean
 }
 
 export interface ManualActionItem {
@@ -125,6 +129,7 @@ export interface CreateJobPayload {
   retryPolicy?: RetryPolicy
   recurrence?: Recurrence
   triggerJobId?: string
+  reconciliation?: ReconciliationSetup
 }
 
 export type RecurrenceFrequency = 'Daily' | 'Weekly' | 'Monthly'
@@ -175,7 +180,8 @@ export function webhookUrl(jobId: string): string {
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
   const headers = new Headers(init.headers)
-  if (init.body) headers.set('Content-Type', 'application/json')
+  // A FormData body (file upload) sets its own multipart boundary header.
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers })
@@ -197,4 +203,96 @@ export type NotificationEvent = 'JobCompleted' | 'JobFailed' | 'ApprovalRequeste
 export interface NotificationPreference {
   event: NotificationEvent
   enabled: boolean
+}
+
+// ---- file reconciliation ----
+
+export type ComparisonOperator = 'Equal' | 'NotEqual' | 'LessThan' | 'LessThanOrEqual' | 'GreaterThan' | 'GreaterThanOrEqual'
+export type ToleranceMode = 'Absolute' | 'Percent'
+export type RecordStatus = 'Pass' | 'Fail'
+
+/** A CSV the user uploaded: its columns come from the file's own header row. */
+export interface InputFile {
+  id: string
+  alias: string
+  fileName: string
+  headers: string[]
+  rowCount: number
+  sizeBytes: number
+  uploadedAtUtc: string
+  /** First rows, only returned by the upload call. */
+  preview: string[][]
+}
+
+export interface ReconciliationRule {
+  id?: string | null
+  name: string
+  leftAlias: string
+  rightAlias: string
+  leftKeyColumn: string | null
+  rightKeyColumn: string | null
+  leftExpression: string
+  operator: ComparisonOperator
+  rightExpression: string
+  tolerance: number
+  toleranceMode: ToleranceMode
+}
+
+export interface ReconciliationSetup {
+  files: { fileId: string; alias: string }[]
+  rules: ReconciliationRule[]
+}
+
+export interface ReconciliationSetupView {
+  files: InputFile[]
+  rules: ReconciliationRule[]
+}
+
+export interface RuleSummary {
+  ruleId: string
+  ruleName: string
+  description: string
+  total: number
+  passed: number
+  failed: number
+}
+
+export interface ReconciliationSummary {
+  runId: string
+  jobId: string
+  jobName: string
+  runStatus: RunStatus
+  finishedAtUtc: string | null
+  total: number
+  passed: number
+  failed: number
+  rules: RuleSummary[]
+}
+
+export interface ReconciliationRecord {
+  id: number
+  ruleId: string
+  ruleName: string
+  recordKey: string
+  leftRow: number | null
+  rightRow: number | null
+  leftValue: number | null
+  rightValue: number | null
+  difference: number | null
+  status: RecordStatus
+  reason: string
+}
+
+export interface ReconciliationPage {
+  items: ReconciliationRecord[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** Uploads CSV files. They are parsed on arrival, so the response already lists each file's real columns. */
+export function uploadJobFiles(files: File[], token?: string | null): Promise<InputFile[]> {
+  const body = new FormData()
+  for (const f of files) body.append('files', f, f.name)
+  return apiFetch<InputFile[]>('/job-files', { method: 'POST', body }, token)
 }

@@ -1,5 +1,6 @@
 using JobScheduler.Application.Jobs;
 using JobScheduler.Domain.Reconciliation;
+using JobScheduler.Domain.Runs;
 
 namespace JobScheduler.Application.Reconciliation;
 
@@ -43,7 +44,15 @@ public sealed record ReplaceFileRequest(string Alias, Guid FileId);
 public sealed record RuleSummaryDto(Guid RuleId, string RuleName, string Description, int Total, int Passed, int Failed);
 
 public sealed record RunReconciliationSummaryDto(
-    Guid RunId, Guid JobId, string JobName, int Total, int Passed, int Failed, IReadOnlyList<RuleSummaryDto> Rules);
+    Guid RunId,
+    Guid JobId,
+    string JobName,
+    RunStatus RunStatus,
+    DateTime? FinishedAtUtc,
+    int Total,
+    int Passed,
+    int Failed,
+    IReadOnlyList<RuleSummaryDto> Rules);
 
 public sealed record ReconciliationResultDto(
     long Id,
@@ -68,4 +77,5 @@ public sealed record ReconciliationReport(
     Guid RunId,
     RunReconciliationSummaryDto Summary,
     IReadOnlyList<ReconciliationResultDto> Results,
-    RecordStatus? StatusFilter);
+    RecordStatus? StatusFilter,
+    string? RuleFilterName = null);

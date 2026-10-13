@@ -75,6 +75,9 @@ public static class ExecutionServiceCollectionExtensions
         services.AddScoped<IInputFileService, InputFileService>();
         services.AddScoped<IReconciliationSetupService, ReconciliationSetupService>();
         services.AddScoped<IReconciliationRunner, ReconciliationRunner>();
+        services.AddSingleton<IReconciliationExporter, CsvReconciliationExporter>();
+        services.AddSingleton<IReconciliationExporter, PdfReconciliationExporter>();
+        services.AddScoped<IReconciliationResultsService, ReconciliationResultsService>();
 
         services.AddScoped<IApprovalStore, EfApprovalStore>();
         services.AddScoped<IApprovalService, ApprovalService>();

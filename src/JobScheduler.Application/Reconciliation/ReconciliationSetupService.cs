@@ -218,8 +218,9 @@ public partial class ReconciliationSetupService(
     private static string ResolveColumn(IReadOnlyList<string> headers, string column, string alias, string kind, string ruleName)
     {
         var match = headers.FirstOrDefault(h => string.Equals(h, column.Trim(), StringComparison.OrdinalIgnoreCase));
+        var what = kind == "key" ? "key column" : "column";
         return match ?? throw new ValidationException(
-            $"Rule '{ruleName}': the {kind} column '{column}' does not exist in '{alias}'. Columns: {string.Join(", ", headers)}.");
+            $"Rule '{ruleName}': the {what} '{column}' does not exist in '{alias}'. Columns: {string.Join(", ", headers)}.");
     }
 
     /// <summary>Every column of one alias that the rules read: join keys and expression references.</summary>

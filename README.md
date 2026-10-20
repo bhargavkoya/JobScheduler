@@ -4,14 +4,30 @@ A demoable skeleton for a job scheduling/orchestration platform — scheduling, 
 
 This is a base-level interview POC, not a production system.
 
+## Demo video
+
+[![Watch the demo on YouTube](https://img.youtube.com/vi/96mlakVsfT0/hqdefault.jpg)](https://youtu.be/96mlakVsfT0)
+
+Watch the walkthrough: **https://youtu.be/96mlakVsfT0**. To follow along yourself, use the script in [`docs/DEMO.md`](docs/DEMO.md).
+
+## What it does
+
+- **Five schedule types**: Fixed, Recurrent (IST cron), Event-based (job chaining), Trigger-based (webhook) and Manual, created from an admin-approved template catalog.
+- **Queued pipeline**: download report (finance REST stub) -> rules-based calculation -> Gmail email, behind interfaces (`IFinanceAppClient`, `IJobQueue`, email sender, `IRule`).
+- **Retries and idempotency**: automatic retry with exponential backoff, manual Retry that resumes after the last good step, and an idempotency key per run so nothing is sent or counted twice.
+- **Approvals**: single-approver manual-action jobs, a manual queue, follow-up reminder and an at-risk flag.
+- **File reconciliation**: upload your own CSVs, define record-by-record rules over their columns, see per-record Pass/Fail and export CSV/PDF.
+- **Access control**: email + password, JWT, Employee/Admin roles, Business/Technical teams and permission claims.
+
 ## Project docs
 
 - [`docs/PRD.md`](docs/PRD.md) — product requirements
-- [`docs/DEMO.md`](docs/DEMO.md) — 5-minute demo script
+- [`docs/DEMO.md`](docs/DEMO.md) — 5-minute demo script (the [video](https://youtu.be/96mlakVsfT0) follows it)
 - [`docs/TESTING.md`](docs/TESTING.md) — manual testing guide: accounts, every template and schedule type, expected results, troubleshooting
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current-state architecture, updated every phase
 - [`docs/PLAN.md`](docs/PLAN.md) — phased build checklist, updated every phase
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisions log, appended every phase
+- [`docs/samples`](docs/samples/README.md) — sample CSVs and expected results for file reconciliation
 
 ## Stack
 

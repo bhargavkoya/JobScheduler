@@ -1,5 +1,7 @@
 # 5-minute demo script
 
+Recorded walkthrough: [YouTube demo](https://youtu.be/96mlakVsfT0).
+
 More scenarios (every template, schedule type, troubleshooting): [`TESTING.md`](TESTING.md).
 
 Logins (password `Passw0rd!`): `business@jobscheduler.local` (Business employee, can approve), `tech@jobscheduler.local` (Technical, can retry, observes Business), `admin@jobscheduler.local` (all permissions).

@@ -15,6 +15,8 @@ What was built, phase by phase. Each phase was a branch and a PR to `main`, and 
 
 | 8 | File reconciliation (requested after Phase 7): upload CSVs, per-job record-by-record rules over their columns, per-record pass/fail results, CSV/PDF export, replace-file, web UI | Upload the sample files, define rules, run, see every record's result and export it; a different set of files with different columns works the same way | **Done** - see note below |
 
+A recorded demo of the finished POC is on YouTube: https://youtu.be/96mlakVsfT0
+
 ## Phase 7 note
 
 - **Webhook trigger**: `POST /webhooks/jobs/{id}` with `X-Webhook-Token`. The token is returned once at create time and only its SHA-256 is stored. Without an `Idempotency-Key` header every call is a new run; with one, a replay returns the same run.

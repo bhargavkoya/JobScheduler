@@ -27,6 +27,7 @@ Watch the walkthrough: **https://youtu.be/96mlakVsfT0**. To follow along yoursel
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — current-state architecture, updated every phase
 - [`docs/PLAN.md`](docs/PLAN.md) — phased build checklist, updated every phase
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisions log, appended every phase
+- [`docs/INTERVIEW_QA.md`](docs/INTERVIEW_QA.md) — interview Q&A: project questions and system-design questions
 - [`docs/samples`](docs/samples/README.md) — sample CSVs and expected results for file reconciliation
 
 ## Stack
